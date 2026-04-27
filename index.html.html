@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macro Risk Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f11;
+    --bg2: #161719;
+    --bg3: #1e2023;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8e9ea;
+    --text2: #8a8d94;
+    --text3: #545760;
+    --amber: #d48c2a;
+    --amber-bg: rgba(212,140,42,0.1);
+    --red: #c9483a;
+    --red-bg: rgba(201,72,58,0.1);
+    --green: #3d9e6a;
+    --green-bg: rgba(61,158,106,0.1);
+    --blue: #4a90c4;
+    --blue-bg: rgba(74,144,196,0.1);
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  .topbar { border-bottom: 1px solid var(--border); padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .logo-text { font-family: var(--mono); font-size: 13px; color: var(--text2); letter-spacing: 0.05em; }
+  .topbar-right { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  .main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .hero { margin-bottom: 40px; }
+  .hero h1 { font-size: 28px; font-weight: 300; color: var(--text); letter-spacing: -0.02em; margin-bottom: 6px; }
+  .hero h1 span { color: var(--amber); }
+  .hero p { font-size: 13px; color: var(--text3); }
+
+  .overall-risk { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; }
+  .risk-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .risk-title { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
+  .risk-score-display { font-family: var(--mono); font-size: 24px; color: var(--text); }
+  .risk-score-display span { font-size: 13px; color: var(--text3); }
+  .risk-bar-track { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+  .risk-bar-fill { height: 100%; border-radius: 2px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+  .risk-status-row { display: flex; justify-content: space-between; }
+  .risk-status-label { font-size: 12px; color: var(--text2); }
+  .risk-status-badge { font-family: var(--mono); font-size: 11px; padding: 2px 10px; border-radius: 20px; }
+
+  .section-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  .indicators-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+  .ind-card { background: var(--bg2); padding: 18px 20px; position: relative; }
+  .ind-name { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+  .ind-val { font-family: var(--mono); font-size: 20px; color: var(--text); margin-bottom: 2px; }
+  .ind-sub { font-size: 11px; color: var(--text3); }
+  .ind-badge { position: absolute; top: 16px; right: 16px; font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 20px; }
+  .badge-normal { background: var(--green-bg); color: var(--green); }
+  .badge-watch { background: var(--amber-bg); color: var(--amber); }
+  .badge-danger { background: var(--red-bg); color: var(--red); }
+  .badge-loading { background: var(--bg3); color: var(--text3); }
+
+  .tiers { display: flex; flex-direction: column; gap: 16px; margin-bottom: 32px; }
+  .tier-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .tier-header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .tier-tag { font-family: var(--mono); font-size: 10px; padding: 3px 10px; border-radius: 20px; }
+  .tier-tag-1 { background: var(--amber-bg); color: var(--amber); }
+  .tier-tag-2 { background: rgba(201,72,58,0.08); color: #d46050; }
+  .tier-tag-3 { background: var(--red-bg); color: var(--red); }
+  .tier-desc { font-size: 12px; color: var(--text3); }
+  .tier-rows { }
+  .tier-row { display: flex; align-items: center; gap: 12px; padding: 11px 20px; border-bottom: 1px solid var(--border); }
+  .tier-row:last-child { border-bottom: none; }
+  .tier-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .tier-item-text { flex: 1; font-size: 13px; color: var(--text2); }
+  .tier-item-reading { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  .analysis-section { margin-bottom: 32px; }
+  .analysis-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-height: 100px; }
+  .analysis-box p { font-size: 14px; color: var(--text2); line-height: 1.8; }
+  .analysis-placeholder { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+
+  .actions-section { margin-bottom: 32px; }
+  .actions-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .action-row { display: flex; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .action-row:last-child { border-bottom: none; }
+  .action-num { font-family: var(--mono); font-size: 11px; color: var(--text3); padding-top: 2px; flex-shrink: 0; }
+  .action-text { font-size: 13px; color: var(--text2); line-height: 1.6; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }
+  .btn { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 20px; font-family: var(--sans); font-size: 13px; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+  .btn:active { transform: scale(0.98); }
+  .btn-accent { border-color: var(--amber); color: var(--amber); }
+  .btn-accent:hover { background: var(--amber-bg); }
+
+  .email-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; display: none; }
+  .email-panel label { font-size: 12px; color: var(--text3); display: block; margin-bottom: 6px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  .email-panel input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 12px; outline: none; }
+  .email-panel input:focus { border-color: var(--amber); }
+  .email-panel .btn-send { width: 100%; background: var(--amber-bg); border: 1px solid var(--amber); color: var(--amber); border-radius: 8px; padding: 10px; font-family: var(--sans); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .email-panel .btn-send:hover { background: rgba(212,140,42,0.2); }
+  .email-note { font-size: 11px; color: var(--text3); margin-top: 8px; }
+
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--border2); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--text3); margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .last-updated { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-bottom: 32px; }
+
+  @media (max-width: 600px) {
+    .topbar { padding: 12px 16px; }
+    .main { padding: 24px 16px 60px; }
+    .hero h1 { font-size: 22px; }
+    .indicators-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo-dot" id="live-dot"></div>
+    <span class="logo-text">MACRO RISK MONITOR</span>
+  </div>
+  <div class="topbar-right" id="topbar-time">—</div>
+</div>
+
+<div class="main">
+  <div class="hero">
+    <h1>Debt cycle <span>risk assessment</span></h1>
+    <p>Dalio framework — Tier 1 / 2 / 3 signal tracking &amp; weekly portfolio briefing</p>
+  </div>
+
+  <div class="overall-risk">
+    <div class="risk-header">
+      <span class="risk-title">Overall risk score</span>
+      <span class="risk-score-display" id="risk-score">—<span>/100</span></span>
+    </div>
+    <div class="risk-bar-track">
+      <div class="risk-bar-fill" id="risk-bar" style="width:0%"></div>
+    </div>
+    <div class="risk-status-row">
+      <span class="risk-status-label" id="risk-status-label">Loading market data...</span>
+      <span class="risk-status-badge badge-loading" id="risk-status-badge">—</span>
+    </div>
+  </div>
+
+  <div class="section-label">Live market indicators</div>
+  <div class="indicators-grid" id="indicators-grid">
+    <div class="ind-card"><div class="ind-name">30-yr Treasury yield</div><div class="ind-val" id="v-tsy">—</div><div class="ind-sub">Danger zone &gt; 5.5%</div><span class="ind-badge badge-loading" id="s-tsy">—</span></div>
+    <div class="ind-card"><div class="ind-name">10-yr Treasury yield</div><div class="ind-val" id="v-10y">—</div><div class="ind-sub">Curve steepening watch</div><span class="ind-badge badge-loading" id="s-10y">—</span></div>
+    <div class="ind-card"><div class="ind-name">Dollar index (DXY)</div><div class="ind-val" id="v-dxy">—</div><div class="ind-sub">Watch for sustained fall</div><span class="ind-badge badge-loading" id="s-dxy">—</span></div>
+    <div class="ind-card"><div class="ind-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub">Systemic hedge signal &gt; $3,000</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
+    <div class="ind-card"><div class="ind-name">S&amp;P 500</div><div class="ind-val" id="v-spy">—</div><div class="ind-sub">Bubble valuation watch</div><span class="ind-badge badge-loading" id="s-spy">—</span></div>
+    <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">~ 320 bps</div><div class="ind-sub">Danger zone &gt; 500 bps</div><span class="ind-badge badge-normal" id="s-hy">Contained</span></div>
+  </div>
+
+  <div class="section-label">Tier signal tracker</div>
+  <div class="tiers">
+    <div class="tier-block">
+      <div class="tier-header">
+        <span class="tier-tag tier-tag-1">Tier 1</span>
+        <span class="tier-desc">Already elevated — watch for acceleration</span>
+      </div>
+      <div class="tier-rows">
+        <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Treasury term premium rising (NY Fed ACM model)</div><div class="tier-item-reading">Elevated</div></div>
+        <div class="tier-row"><div class="tier-dot" id="d-dxy" style="background:var(--amber)"></div><div class="tier-item-text">Dollar index sustained weakness</div><div class="tier-item-reading" id="t1-dxy">—</div></div>
+        <div class="tier-row"><div class="tier-dot" id="d-gold" style="background:var(--amber)"></div><div class="tier-item-text">Gold holding above $3,000 despite high real rates</div><div class="tier-item-reading" id="t1-gold">—</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Foreign Treasury selling — TIC report (monthly)</div><div class="tier-item-reading">Check TIC.gov</div></div>
+      </div>
+    </div>
+    <div class="tier-block">
+      <div class="tier-header">
+        <span class="tier-tag tier-tag-2">Tier 2</span>
+        <span class="tier-desc">Not yet triggered — key escalation signals</span>
+      </div>
+      <div class="tier-rows">
+        <div class="tier-row"><div class="tier-dot" id="d-30y" style="background:var(--green)"></div><div class="tier-item-text">30-yr Treasury yield above 5.5% sustained</div><div class="tier-item-reading" id="t2-30y">—</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">HY credit spreads blowing out (OAS &gt; 500 bps)</div><div class="tier-item-reading">~320 bps — OK</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Weak or failed Treasury auction (large tail)</div><div class="tier-item-reading">Monitor post-auction</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Yen carry trade unwind — USD/JPY rapid move</div><div class="tier-item-reading">Monitor USD/JPY</div></div>
+      </div>
+    </div>
+    <div class="tier-block">
+      <div class="tier-header">
+        <span class="tier-tag tier-tag-3">Tier 3</span>
+        <span class="tier-desc">Acute crisis signals — act quickly if triggered</span>
+      </div>
+      <div class="tier-rows">
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Fed emergency Treasury market intervention</div><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Moody's US sovereign credit downgrade</div><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Repo / SOFR market seizure</div><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Pension fund or insurer distress (LDI-style)</div><div class="tier-item-reading">Not triggered</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="analysis-section">
+    <div class="section-label">AI risk assessment</div>
+    <div class="analysis-box" id="analysis-box">
+      <p class="analysis-placeholder">Click "Run weekly analysis" below to generate your current macro briefing.</p>
+    </div>
+  </div>
+
+  <div class="actions-section">
+    <div class="section-label">Talking points for wealth manager</div>
+    <div class="actions-box" id="actions-box">
+      <div class="action-row"><span class="action-num">—</span><span class="action-text" style="color:var(--text3)">Run analysis to generate this week's talking points.</span></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" onclick="fetchData()">Refresh data</button>
+    <button class="btn btn-accent" onclick="runAnalysis()">Run weekly analysis</button>
+    <button class="btn" onclick="toggleEmail()">Email this report</button>
+  </div>
+
+  <div class="email-panel" id="email-panel">
+    <label>Your Gmail address</label>
+    <input type="email" id="email-input" placeholder="you@gmail.com" />
+    <button class="btn-send" onclick="sendEmail()">Open Gmail with full report</button>
+    <p class="email-note">Opens Gmail compose in a new tab with the full report pre-filled. Nothing is stored or transmitted — runs entirely in your browser.</p>
+  </div>
+
+  <div class="last-updated" id="last-updated">Not yet loaded</div>
+
+  <div class="footer">
+    Macro Risk Monitor &mdash; Dalio Big Debt Cycle framework &mdash; For informational purposes only, not financial advice
+  </div>
+</div>
+
+<script>
+let marketData = {};
+let analysisText = '';
+let actionsText = [];
+
+function updateClock() {
+  document.getElementById('topbar-time').textContent = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+updateClock();
+setInterval(updateClock, 60000);
+
+function setInd(valId, statusId, value, status, cls) {
+  document.getElementById(valId).textContent = value;
+  const el = document.getElementById(statusId);
+  el.textContent = status;
+  el.className = 'ind-badge ' + cls;
+}
+
+async function fetchData() {
+  document.getElementById('last-updated').textContent = 'Fetching live data...';
+  const syms = { tsy30: '^TYX', dxy: 'DX-Y.NYB', gold: 'GC=F', tsy10: '^TNX', spy: '^GSPC' };
+  const proxy = 'https://corsproxy.io/?';
+
+  const results = {};
+  await Promise.all(Object.entries(syms).map(async ([key, sym]) => {
+    try {
+      const url = proxy + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d');
+      const r = await fetch(url);
+      const d = await r.json();
+      results[key] = d.chart.result[0].meta.regularMarketPrice;
+    } catch(e) {
+      results[key] = null;
+    }
+  }));
+
+  marketData = results;
+
+  const t30 = results.tsy30;
+  const t10 = results.tsy10;
+  const dxy = results.dxy;
+  const gold = results.gold;
+  const spy = results.spy;
+
+  if (t30) {
+    const v = t30.toFixed(2) + '%';
+    const cls = t30 > 5.5 ? 'badge-danger' : t30 > 4.8 ? 'badge-watch' : 'badge-normal';
+    const lbl = t30 > 5.5 ? 'Danger' : t30 > 4.8 ? 'Watch' : 'Normal';
+    setInd('v-tsy','s-tsy', v, lbl, cls);
+    document.getElementById('t2-30y').textContent = v;
+    document.getElementById('d-30y').style.background = t30 > 5.5 ? 'var(--red)' : t30 > 4.8 ? 'var(--amber)' : 'var(--green)';
+  }
+  if (t10) {
+    const v = t10.toFixed(2) + '%';
+    setInd('v-10y','s-10y', v, t10 > 4.8 ? 'Watch' : 'Normal', t10 > 4.8 ? 'badge-watch' : 'badge-normal');
+  }
+  if (dxy) {
+    const v = dxy.toFixed(1);
+    const cls = dxy < 98 ? 'badge-danger' : dxy < 102 ? 'badge-watch' : 'badge-normal';
+    const lbl = dxy < 98 ? 'Weak' : dxy < 102 ? 'Watch' : 'Normal';
+    setInd('v-dxy','s-dxy', v, lbl, cls);
+    document.getElementById('t1-dxy').textContent = 'DXY ' + v;
+    document.getElementById('d-dxy').style.background = dxy < 98 ? 'var(--red)' : dxy < 102 ? 'var(--amber)' : 'var(--green)';
+  }
+  if (gold) {
+    const v = '$' + Math.round(gold).toLocaleString();
+    const cls = gold > 3500 ? 'badge-danger' : gold > 3000 ? 'badge-watch' : 'badge-normal';
+    const lbl = gold > 3500 ? 'Elevated' : gold > 3000 ? 'Watch' : 'Normal';
+    setInd('v-gold','s-gold', v, lbl, cls);
+    document.getElementById('t1-gold').textContent = v;
+    document.getElementById('d-gold').style.background = gold > 3000 ? 'var(--amber)' : 'var(--green)';
+  }
+  if (spy) {
+    const v = Math.round(spy).toLocaleString();
+    setInd('v-spy','s-spy', v, spy > 5800 ? 'Watch' : 'Normal', spy > 5800 ? 'badge-watch' : 'badge-normal');
+  }
+
+  marketData.hy = 320;
+  updateOverallRisk();
+  document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
+}
+
+function updateOverallRisk() {
+  let score = 0;
+  const t = marketData;
+  if (t.tsy30 > 5.5) score += 30; else if (t.tsy30 > 4.8) score += 15;
+  if (t.dxy && t.dxy < 98) score += 20; else if (t.dxy && t.dxy < 102) score += 10;
+  if (t.gold && t.gold > 3500) score += 25; else if (t.gold && t.gold > 3000) score += 15;
+  if (t.hy > 500) score += 25; else if (t.hy > 400) score += 10;
+  if (t.tsy10 && t.tsy10 > 4.8) score += 10;
+  score = Math.min(score, 100);
+
+  const bar = document.getElementById('risk-bar');
+  bar.style.width = score + '%';
+  bar.style.background = score > 65 ? 'var(--red)' : score > 35 ? 'var(--amber)' : 'var(--green)';
+  document.getElementById('risk-score').innerHTML = score + '<span>/100</span>';
+
+  const label = score > 65 ? 'High — consider defensive action' : score > 35 ? 'Elevated — monitor closely' : 'Moderate — maintain positioning';
+  const badge = score > 65 ? 'High' : score > 35 ? 'Elevated' : 'Moderate';
+  const badgeCls = score > 65 ? 'badge-danger' : score > 35 ? 'badge-watch' : 'badge-normal';
+  document.getElementById('risk-status-label').textContent = label;
+  const b = document.getElementById('risk-status-badge');
+  b.textContent = badge;
+  b.className = 'risk-status-badge ' + badgeCls;
+}
+
+async function runAnalysis() {
+  const box = document.getElementById('analysis-box');
+  const actbox = document.getElementById('actions-box');
+  box.innerHTML = '<p><span class="spinner"></span>Generating analysis...</p>';
+  actbox.innerHTML = '<div class="action-row"><span class="action-num">—</span><span class="action-text" style="color:var(--text3)">Generating...</span></div>';
+
+  const t30 = marketData.tsy30 ? marketData.tsy30.toFixed(2) + '%' : 'not loaded';
+  const t10 = marketData.tsy10 ? marketData.tsy10.toFixed(2) + '%' : 'not loaded';
+  const dxy = marketData.dxy ? marketData.dxy.toFixed(1) : 'not loaded';
+  const gold = marketData.gold ? '$' + Math.round(marketData.gold).toLocaleString() : 'not loaded';
+  const spy = marketData.spy ? Math.round(marketData.spy).toLocaleString() : 'not loaded';
+
+  const prompt = `You are a senior macro analyst applying Ray Dalio's Big Debt Cycle framework. Today is ${new Date().toDateString()}.
+
+Live market readings:
+- 30-year Treasury yield: ${t30} (danger threshold: >5.5%)
+- 10-year Treasury yield: ${t10}
+- US Dollar index DXY: ${dxy} (watch below 100, danger below 98)
+- Gold: ${gold} (elevated signal if >$3,000 given high real rates)
+- S&P 500: ${spy}
+- High yield credit spread: ~320 bps (danger >500 bps)
+
+Tier status:
+- Tier 1 (already elevated): Treasury term premium elevated, dollar weakness ongoing, gold persistently above $3,000
+- Tier 2 (not yet triggered): HY spreads contained, no major Treasury auction failures, yen carry trade stable
+- Tier 3 (acute): None triggered
+
+Investor profile: $8.6M total — $1.6M managed account, $1M muni ladder, $2M pension lump sum incoming, $4M 401k in mostly equities. 6-10 years to retirement. Goal: grow with protection. NOT looking for buy/sell signals — wants an informed macro opinion on current state.
+
+Write a weekly briefing in 4-5 sentences covering: (1) honest assessment of where we are in the debt cycle right now based on these readings, (2) the one or two signals most worth watching this week, (3) what this means for their overall portfolio posture — not specific trades, just directional orientation. Write it like a thoughtful senior analyst talking to a sophisticated client, not a disclaimer-heavy report.
+
+Then on a new line write exactly: TALKING_POINTS:
+Then list exactly 3 sharp questions or observations they can bring to their wealth manager meeting, each on its own line starting with "- ". These should be intelligent, specific, and hard to deflect with generic answers.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content.map(b => b.text || '').join('');
+    const parts = text.split('TALKING_POINTS:');
+    analysisText = parts[0].trim();
+    actionsText = parts[1] ? parts[1].trim().split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/,'').trim()) : [];
+
+    box.innerHTML = '<p>' + analysisText.replace(/\n\n/g,'</p><p style="margin-top:12px;">').replace(/\n/g,'<br>') + '</p>';
+
+    if (actionsText.length > 0) {
+      actbox.innerHTML = actionsText.map((a,i) => `<div class="action-row"><span class="action-num">0${i+1}</span><span class="action-text">${a}</span></div>`).join('');
+    }
+  } catch(e) {
+    box.innerHTML = '<p style="color:var(--red);">Error connecting to AI. Check your internet connection and try again.</p>';
+  }
+}
+
+function toggleEmail() {
+  const p = document.getElementById('email-panel');
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+}
+
+function sendEmail() {
+  const email = document.getElementById('email-input').value.trim();
+  if (!email) { alert('Please enter your Gmail address.'); return; }
+
+  const date = new Date().toDateString();
+  const t30 = marketData.tsy30 ? marketData.tsy30.toFixed(2) + '%' : 'N/A';
+  const t10 = marketData.tsy10 ? marketData.tsy10.toFixed(2) + '%' : 'N/A';
+  const dxy = marketData.dxy ? marketData.dxy.toFixed(1) : 'N/A';
+  const gold = marketData.gold ? '$' + Math.round(marketData.gold).toLocaleString() : 'N/A';
+  const spy = marketData.spy ? Math.round(marketData.spy).toLocaleString() : 'N/A';
+
+  const subject = `Macro risk briefing — ${date}`;
+  const body = `WEEKLY MACRO RISK BRIEFING
+${date}
+Dalio Big Debt Cycle Framework
+
+━━━━━━━━━━━━━━━━━━━━━━
+MARKET READINGS
+━━━━━━━━━━━━━━━━━━━━━━
+30-yr Treasury yield : ${t30}   (danger > 5.5%)
+10-yr Treasury yield : ${t10}
+Dollar index (DXY)   : ${dxy}   (watch < 100)
+Gold                 : ${gold}  (signal > $3,000)
+S&P 500              : ${spy}
+HY credit spread     : ~320 bps (danger > 500)
+
+━━━━━━━━━━━━━━━━━━━━━━
+TIER STATUS
+━━━━━━━━━━━━━━━━━━━━━━
+TIER 1 (Elevated)  : Term premium up | Dollar weak | Gold > $3,000
+TIER 2 (Not yet)   : HY spreads OK | No auction failures | Yen carry stable
+TIER 3 (Acute)     : None triggered
+
+━━━━━━━━━━━━━━━━━━━━━━
+MACRO ASSESSMENT
+━━━━━━━━━━━━━━━━━━━━━━
+${analysisText || '[Run analysis in the app to populate this section]'}
+
+━━━━━━━━━━━━━━━━━━━━━━
+TALKING POINTS FOR WEALTH MANAGER
+━━━━━━━━━━━━━━━━━━━━━━
+${actionsText.length > 0 ? actionsText.map((a,i)=>`${i+1}. ${a}`).join('\n\n') : '[Run analysis in the app to populate this section]'}
+
+━━━━━━━━━━━━━━━━━━━━━━
+Portfolio: $8.6M total | 6-10 yrs to retirement | Grow with protection
+For informational purposes only — not financial advice.
+`;
+
+  const url = 'https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(email) + '&su=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  window.open(url, '_blank');
+}
+
+fetchData();
+</script>
+</body>
+</html>
