@@ -293,9 +293,10 @@
     <!-- Rules reference -->
     <div class="dca-rules">
       <div class="dca-rules-title">Decision rules — always applied on scheduled date or trigger fire</div>
-      <div class="dca-rule"><span class="dca-rule-trigger">No trigger, score ≥ 40</span><span class="dca-rule-action">Execute $50K as scheduled on first Monday of quarter</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 10% in 90 days</span><span class="dca-rule-action">Execute $100K within 5 business days — skip next scheduled quarter</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 20% in 90 days</span><span class="dca-rule-action">Execute $150K within 5 business days — skip next 2 scheduled quarters</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">No trigger, score ≥ 40</span><span class="dca-rule-action">Execute scheduled amount on first Monday of purchase month</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 10% from 5-day avg high in 90 days</span><span class="dca-rule-action">Execute 2x scheduled amount within 5 business days — skip next scheduled purchase</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 20% from 5-day avg high in 90 days</span><span class="dca-rule-action">Execute 3x scheduled amount within 5 business days — skip next 2 scheduled purchases</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Single-day spike only (no sustained high)</span><span class="dca-rule-action">Ignore — use 5-day average to filter one-day geopolitical reactions</span></div>
       <div class="dca-rule"><span class="dca-rule-trigger">Risk score drops below 40</span><span class="dca-rule-action">Pause 1 week on scheduled date — reassess thesis before executing</span></div>
       <div class="dca-rule"><span class="dca-rule-trigger">Trigger already fired this quarter</span><span class="dca-rule-action">Skip this scheduled purchase — acceleration already deployed capital</span></div>
     </div>
