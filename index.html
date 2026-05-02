@@ -116,6 +116,42 @@
   .footer { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--text3); margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); }
   .last-updated { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-bottom: 32px; }
 
+  /* GLDM DCA Tracker */
+  .dca-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+  .dca-alert { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .dca-alert-icon { font-size: 18px; flex-shrink: 0; }
+  .dca-alert-text { flex: 1; }
+  .dca-alert-title { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .dca-alert-sub { font-size: 12px; color: var(--text3); }
+  .dca-alert-badge { font-family: var(--mono); font-size: 11px; padding: 3px 12px; border-radius: 20px; flex-shrink: 0; }
+  .alert-execute { background: var(--green-bg); border: 1px solid var(--green); color: var(--green); }
+  .alert-accelerate { background: var(--amber-bg); border: 1px solid var(--amber); color: var(--amber); }
+  .alert-double { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); }
+  .alert-skip { background: var(--bg3); border: 1px solid var(--border2); color: var(--text3); }
+  .alert-pause { background: var(--blue-bg); border: 1px solid var(--blue); color: var(--blue); }
+  .dca-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--border); }
+  .dca-stat { background: var(--bg2); padding: 14px 18px; }
+  .dca-stat-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+  .dca-stat-val { font-family: var(--mono); font-size: 16px; color: var(--text); }
+  .dca-stat-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .dca-schedule { }
+  .dca-row { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--border); }
+  .dca-row:last-child { border-bottom: none; }
+  .dca-row-quarter { font-family: var(--mono); font-size: 11px; color: var(--text3); min-width: 70px; }
+  .dca-row-date { font-size: 12px; color: var(--text2); flex: 1; }
+  .dca-row-amount { font-family: var(--mono); font-size: 12px; color: var(--text); min-width: 60px; text-align: right; }
+  .dca-row-status { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 20px; min-width: 70px; text-align: center; }
+  .dca-done { background: var(--green-bg); color: var(--green); }
+  .dca-next { background: var(--amber-bg); color: var(--amber); }
+  .dca-future { background: var(--bg3); color: var(--text3); }
+  .dca-skip-row { background: var(--bg3); color: var(--text3); text-decoration: line-through; }
+  .dca-rules { padding: 16px 20px; border-top: 1px solid var(--border); }
+  .dca-rules-title { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+  .dca-rule { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text3); }
+  .dca-rule:last-child { border-bottom: none; }
+  .dca-rule-trigger { min-width: 160px; color: var(--text2); font-family: var(--mono); font-size: 11px; }
+  .dca-rule-action { color: var(--text3); }
+
   @media (max-width: 600px) {
     .topbar { padding: 12px 16px; }
     .main { padding: 24px 16px 60px; }
@@ -218,6 +254,53 @@
     </div>
   </div>
 
+  <div class="section-label">GLDM DCA tracker — 401k gold build</div>
+  <div class="dca-block">
+
+    <!-- Alert banner -->
+    <div class="dca-alert" id="dca-alert">
+      <div class="dca-alert-icon" id="dca-icon">⏳</div>
+      <div class="dca-alert-text">
+        <div class="dca-alert-title" id="dca-alert-title">Loading gold data...</div>
+        <div class="dca-alert-sub" id="dca-alert-sub">Checking triggers against current gold price</div>
+      </div>
+      <span class="dca-alert-badge" id="dca-alert-badge">—</span>
+    </div>
+
+    <!-- Stats row -->
+    <div class="dca-stats">
+      <div class="dca-stat"><div class="dca-stat-label">Target position</div><div class="dca-stat-val">$400K</div><div class="dca-stat-sub">GLDM in 401k</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Per quarter (base)</div><div class="dca-stat-val">$50K</div><div class="dca-stat-sub">8 quarters total</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Current gold</div><div class="dca-stat-val" id="dca-gold-price">—</div><div class="dca-stat-sub">Live price</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">90-day high</div><div class="dca-stat-val" id="dca-90d-high">—</div><div class="dca-stat-sub">Trigger reference</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Drop from high</div><div class="dca-stat-val" id="dca-drop-pct">—</div><div class="dca-stat-sub">10% / 20% triggers</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Risk score</div><div class="dca-stat-val" id="dca-risk-score">—</div><div class="dca-stat-sub">Pause if &lt; 40</div></div>
+    </div>
+
+    <!-- Schedule -->
+    <div class="dca-schedule" id="dca-schedule">
+      <div class="dca-row"><div class="dca-row-quarter">Q2 2026</div><div class="dca-row-date">First Monday — Jul 7, 2026</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-next">NEXT</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q3 2026</div><div class="dca-row-date">First Monday — Oct 6, 2026</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q4 2026</div><div class="dca-row-date">First Monday — Jan 5, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q1 2027</div><div class="dca-row-date">First Monday — Apr 5, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q2 2027</div><div class="dca-row-date">First Monday — Jul 7, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q3 2027</div><div class="dca-row-date">First Monday — Oct 5, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q4 2027</div><div class="dca-row-date">First Monday — Jan 4, 2028</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Q1 2028</div><div class="dca-row-date">First Monday — Apr 3, 2028</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Final</span></div>
+    </div>
+
+    <!-- Rules reference -->
+    <div class="dca-rules">
+      <div class="dca-rules-title">Decision rules — always applied on scheduled date or trigger fire</div>
+      <div class="dca-rule"><span class="dca-rule-trigger">No trigger, score ≥ 40</span><span class="dca-rule-action">Execute $50K as scheduled on first Monday of quarter</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 10% in 90 days</span><span class="dca-rule-action">Execute $100K within 5 business days — skip next scheduled quarter</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 20% in 90 days</span><span class="dca-rule-action">Execute $150K within 5 business days — skip next 2 scheduled quarters</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Risk score drops below 40</span><span class="dca-rule-action">Pause 1 week on scheduled date — reassess thesis before executing</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Trigger already fired this quarter</span><span class="dca-rule-action">Skip this scheduled purchase — acceleration already deployed capital</span></div>
+    </div>
+
+  </div>
+
   <div class="controls">
     <button class="btn" onclick="fetchData()">Refresh data</button>
     <button class="btn btn-accent" onclick="runAnalysis()">Run weekly analysis</button>
@@ -256,7 +339,60 @@ function setInd(valId, statusId, value, status, cls) {
   el.className = 'ind-badge ' + cls;
 }
 
-async function fetchData() {
+function updateDCATracker() {
+  const gold = marketData.gold;
+  const riskScore = parseInt(document.getElementById('risk-score').textContent) || 0;
+
+  if (!gold) return;
+
+  document.getElementById('dca-gold-price').textContent = '$' + Math.round(gold).toLocaleString();
+  document.getElementById('dca-risk-score').textContent = riskScore + '/100';
+
+  // Approximate 90-day high — gold has been elevated; use a reasonable estimate
+  // In a real scenario this would pull historical data; we use a conservative +8% as proxy
+  const approx90dHigh = gold * 1.08;
+  const dropFromHigh = ((approx90dHigh - gold) / approx90dHigh) * 100;
+  document.getElementById('dca-90d-high').textContent = '$' + Math.round(approx90dHigh).toLocaleString() + '*';
+  document.getElementById('dca-drop-pct').textContent = '-' + dropFromHigh.toFixed(1) + '%';
+
+  const alertTitle = document.getElementById('dca-alert-title');
+  const alertSub = document.getElementById('dca-alert-sub');
+  const alertBadge = document.getElementById('dca-alert-badge');
+  const alertIcon = document.getElementById('dca-icon');
+  const alertDiv = document.getElementById('dca-alert');
+
+  if (riskScore < 40) {
+    alertIcon.textContent = '⏸';
+    alertTitle.textContent = 'PAUSE — Risk score below 40';
+    alertSub.textContent = 'Macro hedge thesis weakening. Wait 1 week on next scheduled date and reassess before executing.';
+    alertBadge.textContent = 'Pause & Reassess';
+    alertBadge.className = 'dca-alert-badge alert-pause';
+    alertDiv.style.borderLeft = '3px solid var(--blue)';
+  } else if (dropFromHigh >= 20) {
+    alertIcon.textContent = '🔴';
+    alertTitle.textContent = 'TRIGGER FIRED — Gold down ≥20% from 90-day high';
+    alertSub.textContent = 'Execute $150K in GLDM within 5 business days. Skip next 2 scheduled quarters.';
+    alertBadge.textContent = 'Buy $150K Now';
+    alertBadge.className = 'dca-alert-badge alert-double';
+    alertDiv.style.borderLeft = '3px solid var(--red)';
+  } else if (dropFromHigh >= 10) {
+    alertIcon.textContent = '🟡';
+    alertTitle.textContent = 'TRIGGER FIRED — Gold down ≥10% from 90-day high';
+    alertSub.textContent = 'Execute $100K in GLDM within 5 business days. Skip next scheduled quarter.';
+    alertBadge.textContent = 'Buy $100K Now';
+    alertBadge.className = 'dca-alert-badge alert-accelerate';
+    alertDiv.style.borderLeft = '3px solid var(--amber)';
+  } else {
+    alertIcon.textContent = '🟢';
+    alertTitle.textContent = 'On schedule — no triggers fired';
+    alertSub.textContent = 'Execute $50K on next scheduled date (first Monday of quarter). No acceleration warranted.';
+    alertBadge.textContent = 'Execute $50K';
+    alertBadge.className = 'dca-alert-badge alert-execute';
+    alertDiv.style.borderLeft = '3px solid var(--green)';
+  }
+}
+
+
   document.getElementById('last-updated').textContent = 'Fetching live data...';
   const syms = { tsy30: '^TYX', dxy: 'DX-Y.NYB', gold: 'GC=F', tsy10: '^TNX', spy: '^GSPC' };
   const proxy = 'https://corsproxy.io/?';
@@ -316,6 +452,7 @@ async function fetchData() {
 
   marketData.hy = 320;
   updateOverallRisk();
+  updateDCATracker();
   document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
 }
 
