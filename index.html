@@ -577,7 +577,9 @@ Then on a new line write exactly: TALKING_POINTS:
 Then list exactly 3 sharp questions or observations they can bring to their wealth manager meeting, each on its own line starting with "- ". These should be intelligent, specific, and hard to deflect with generic answers.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const proxy = 'https://corsproxy.io/?';
+    const anthropicUrl = proxy + encodeURIComponent('https://api.anthropic.com/v1/messages');
+    const resp = await fetch(anthropicUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
