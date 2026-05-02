@@ -102,13 +102,6 @@
   .btn-accent { border-color: var(--amber); color: var(--amber); }
   .btn-accent:hover { background: var(--amber-bg); }
 
-  .email-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; display: none; }
-  .email-panel label { font-size: 12px; color: var(--text3); display: block; margin-bottom: 6px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
-  .email-panel input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 12px; outline: none; }
-  .email-panel input:focus { border-color: var(--amber); }
-  .email-panel .btn-send { width: 100%; background: var(--amber-bg); border: 1px solid var(--amber); color: var(--amber); border-radius: 8px; padding: 10px; font-family: var(--sans); font-size: 13px; cursor: pointer; transition: all 0.15s; }
-  .email-panel .btn-send:hover { background: rgba(212,140,42,0.2); }
-  .email-note { font-size: 11px; color: var(--text3); margin-top: 8px; }
 
   .spinner { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--border2); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -240,20 +233,6 @@
     </div>
   </div>
 
-  <div class="analysis-section">
-    <div class="section-label">AI risk assessment</div>
-    <div class="analysis-box" id="analysis-box">
-      <p class="analysis-placeholder">Click "Run weekly analysis" below to generate your current macro briefing.</p>
-    </div>
-  </div>
-
-  <div class="actions-section">
-    <div class="section-label">Talking points for wealth manager</div>
-    <div class="actions-box" id="actions-box">
-      <div class="action-row"><span class="action-num">—</span><span class="action-text" style="color:var(--text3)">Run analysis to generate this week's talking points.</span></div>
-    </div>
-  </div>
-
   <div class="section-label">GLDM DCA tracker — 401k gold build</div>
   <div class="dca-block">
 
@@ -306,15 +285,6 @@
 
   <div class="controls">
     <button class="btn" onclick="fetchData()">Refresh data</button>
-    <button class="btn btn-accent" onclick="runAnalysis()">Run weekly analysis</button>
-    <button class="btn" onclick="toggleEmail()">Email this report</button>
-  </div>
-
-  <div class="email-panel" id="email-panel">
-    <label>Your Gmail address</label>
-    <input type="email" id="email-input" placeholder="you@gmail.com" />
-    <button class="btn-send" onclick="sendEmail()">Open Gmail with full report</button>
-    <p class="email-note">Opens Gmail compose in a new tab with the full report pre-filled. Nothing is stored or transmitted — runs entirely in your browser.</p>
   </div>
 
   <div class="last-updated" id="last-updated">Not yet loaded</div>
@@ -326,8 +296,6 @@
 
 <script>
 let marketData = {};
-let analysisText = '';
-let actionsText = [];
 
 function updateClock() {
   document.getElementById('topbar-time').textContent = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
@@ -421,7 +389,6 @@ function updateDCATracker() {
 
 
 const FRED_API_KEY = 'e009c048723673a26fda0f7aaef4f060';
-const ANTHROPIC_API_KEY = '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';
 
 async function fetchData() {
   document.getElementById('last-updated').textContent = 'Fetching live data...';
@@ -538,153 +505,6 @@ function updateOverallRisk() {
   const b = document.getElementById('risk-status-badge');
   b.textContent = badge;
   b.className = 'risk-status-badge ' + badgeCls;
-}
-
-async function runAnalysis() {
-  const box = document.getElementById('analysis-box');
-  const actbox = document.getElementById('actions-box');
-  box.innerHTML = '<p><span class="spinner"></span>Generating analysis...</p>';
-  actbox.innerHTML = '<div class="action-row"><span class="action-num">—</span><span class="action-text" style="color:var(--text3)">Generating...</span></div>';
-
-  const t30 = marketData.tsy30 ? marketData.tsy30.toFixed(2) + '%' : 'not loaded';
-  const t10 = marketData.tsy10 ? marketData.tsy10.toFixed(2) + '%' : 'not loaded';
-  const dxy = marketData.dxy ? marketData.dxy.toFixed(1) : 'not loaded';
-  const gold = marketData.gold ? '$' + Math.round(marketData.gold).toLocaleString() : 'not loaded';
-  const spy = marketData.spy ? Math.round(marketData.spy).toLocaleString() : 'not loaded';
-
-  const hyLive = marketData.hy ? Math.round(marketData.hy) + ' bps' : '~320 bps';
-
-  const prompt = `You are a senior macro analyst applying Ray Dalio's Big Debt Cycle framework. Today is ${new Date().toDateString()}.
-
-Live market readings:
-- 30-year Treasury yield: ${t30} (danger threshold: >5.5%)
-- 10-year Treasury yield: ${t10}
-- US Dollar index DXY: ${dxy} (watch below 100, danger below 98)
-- Gold: ${gold} (elevated signal if >$3,000 given high real rates)
-- S&P 500: ${spy}
-- High yield credit spread: ${hyLive} (danger >500 bps)
-
-Tier status:
-- Tier 1 (already elevated): Treasury term premium elevated, dollar weakness ongoing, gold persistently above $3,000
-- Tier 2 (not yet triggered): HY spreads contained, no major Treasury auction failures, yen carry trade stable
-- Tier 3 (acute): None triggered
-
-Investor profile: $8.6M total — $1.6M managed account, $1M muni ladder, $2M pension lump sum incoming, $4M 401k in mostly equities. 6-10 years to retirement. Goal: grow with protection. NOT looking for buy/sell signals — wants an informed macro opinion on current state.
-
-Write a weekly briefing in 4-5 sentences covering: (1) honest assessment of where we are in the debt cycle right now based on these readings, (2) the one or two signals most worth watching this week, (3) what this means for their overall portfolio posture — not specific trades, just directional orientation. Write it like a thoughtful senior analyst talking to a sophisticated client, not a disclaimer-heavy report.
-
-Then on a new line write exactly: TALKING_POINTS:
-Then list exactly 3 sharp questions or observations they can bring to their wealth manager meeting, each on its own line starting with "- ". These should be intelligent, specific, and hard to deflect with generic answers.`;
-
-  try {
-    const proxy = 'https://corsproxy.io/?';
-    const anthropicUrl = proxy + encodeURIComponent('https://api.anthropic.com/v1/messages');
-    const resp = await fetch(anthropicUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await resp.json();
-    const text = data.content.map(b => b.text || '').join('');
-    const parts = text.split('TALKING_POINTS:');
-    analysisText = parts[0].trim();
-    actionsText = parts[1] ? parts[1].trim().split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/,'').trim()) : [];
-
-    box.innerHTML = '<p>' + analysisText.replace(/\n\n/g,'</p><p style="margin-top:12px;">').replace(/\n/g,'<br>') + '</p>';
-
-    if (actionsText.length > 0) {
-      actbox.innerHTML = actionsText.map((a,i) => `<div class="action-row"><span class="action-num">0${i+1}</span><span class="action-text">${a}</span></div>`).join('');
-    }
-  } catch(e) {
-    box.innerHTML = '<p style="color:var(--red);">Error connecting to AI. Check your internet connection and try again.</p>';
-  }
-}
-
-function toggleEmail() {
-  const p = document.getElementById('email-panel');
-  p.style.display = p.style.display === 'block' ? 'none' : 'block';
-}
-
-async function sendEmail() {
-  const email = document.getElementById('email-input').value.trim();
-  if (!email) { alert('Please enter your Gmail address.'); return; }
-
-  // Auto-run analysis if not already done
-  if (!analysisText) {
-    const btn = document.querySelector('.btn-send');
-    if (btn) btn.textContent = 'Running analysis first...';
-    await runAnalysis();
-    if (btn) btn.textContent = 'Open Gmail with full report';
-  }
-
-  const date = new Date().toDateString();
-  const t30 = marketData.tsy30 ? marketData.tsy30.toFixed(2) + '%' : 'N/A';
-  const t10 = marketData.tsy10 ? marketData.tsy10.toFixed(2) + '%' : 'N/A';
-  const dxy = marketData.dxy ? marketData.dxy.toFixed(1) : 'N/A';
-  const gold = marketData.gold ? '$' + Math.round(marketData.gold).toLocaleString() : 'N/A';
-  const spy = marketData.spy ? Math.round(marketData.spy).toLocaleString() : 'N/A';
-  const hy = marketData.hy ? Math.round(marketData.hy) + ' bps' : '~320 bps';
-  const riskScore = document.getElementById('risk-score').textContent || '—';
-  const riskLabel = document.getElementById('risk-status-badge').textContent || '—';
-
-  const subject = `Macro risk briefing — ${date}`;
-  const body = `WEEKLY MACRO RISK BRIEFING
-${date}
-Dalio Big Debt Cycle Framework
-
-━━━━━━━━━━━━━━━━━━━━━━
-OVERALL RISK SCORE: ${riskScore} — ${riskLabel}
-━━━━━━━━━━━━━━━━━━━━━━
-
-━━━━━━━━━━━━━━━━━━━━━━
-MARKET READINGS
-━━━━━━━━━━━━━━━━━━━━━━
-30-yr Treasury yield : ${t30}   (danger > 5.5%)
-10-yr Treasury yield : ${t10}
-Dollar index (DXY)   : ${dxy}   (watch < 100)
-Gold                 : ${gold}  (signal > $3,000)
-S&P 500              : ${spy}
-HY credit spread     : ${hy} (danger > 500)
-
-━━━━━━━━━━━━━━━━━━━━━━
-TIER STATUS
-━━━━━━━━━━━━━━━━━━━━━━
-TIER 1 (Elevated)  : Term premium up | Dollar weak | Gold > $3,000
-TIER 2 (Not yet)   : HY spreads contained | No auction failures | Yen carry stable
-TIER 3 (Acute)     : None triggered
-
-━━━━━━━━━━━━━━━━━━━━━━
-MACRO ASSESSMENT
-━━━━━━━━━━━━━━━━━━━━━━
-${analysisText || '[Analysis unavailable]'}
-
-━━━━━━━━━━━━━━━━━━━━━━
-TALKING POINTS FOR WEALTH MANAGER
-━━━━━━━━━━━━━━━━━━━━━━
-${actionsText.length > 0 ? actionsText.map((a,i)=>`${i+1}. ${a}`).join('\n\n') : '[Talking points unavailable]'}
-
-━━━━━━━━━━━━━━━━━━━━━━
-GLDM DCA STATUS
-━━━━━━━━━━━━━━━━━━━━━━
-${document.getElementById('dca-alert-title').textContent}
-${document.getElementById('dca-alert-sub').textContent}
-
-━━━━━━━━━━━━━━━━━━━━━━
-Portfolio: $8.5M total | 6-10 yrs to retirement | Grow with protection
-For informational purposes only — not financial advice.
-`;
-
-  const url = 'https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(email) + '&su=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-  window.open(url, '_blank');
 }
 
 fetchData();
