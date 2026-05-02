@@ -197,7 +197,7 @@
     <div class="ind-card"><div class="ind-name">Dollar index (DXY)</div><div class="ind-val" id="v-dxy">—</div><div class="ind-sub">Watch for sustained fall</div><span class="ind-badge badge-loading" id="s-dxy">—</span></div>
     <div class="ind-card"><div class="ind-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub">Systemic hedge signal &gt; $3,000</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
     <div class="ind-card"><div class="ind-name">S&amp;P 500</div><div class="ind-val" id="v-spy">—</div><div class="ind-sub">Bubble valuation watch</div><span class="ind-badge badge-loading" id="s-spy">—</span></div>
-    <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">~ 320 bps</div><div class="ind-sub">Danger zone &gt; 500 bps</div><span class="ind-badge badge-normal" id="s-hy">Contained</span></div>
+    <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">~ 320 bps</div><div class="ind-sub">Danger zone &gt; 500 bps</div><div style="margin-top:6px;"><span class="ind-badge" id="s-hy" style="position:static;display:inline-block;background:var(--green-bg);color:var(--green);">Contained</span></div></div>
   </div>
 
   <div class="section-label">Tier signal tracker</div>
@@ -397,7 +397,7 @@ function updateDCATracker() {
 
 async function fetchData() {
   document.getElementById('last-updated').textContent = 'Fetching live data...';
-  const syms = { tsy30: '^TYX', dxy: 'DX-Y.NYB', gold: 'GC=F', tsy10: '^TNX', spy: '^GSPC' };
+  const syms = { tsy30: '^TYX', dxy: 'DX-Y.NYB', gold: 'GLDM', tsy10: '^TNX', spy: '^GSPC' };
   const proxy = 'https://corsproxy.io/?';
 
   const results = {};
@@ -406,7 +406,10 @@ async function fetchData() {
       const url = proxy + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d');
       const r = await fetch(url);
       const d = await r.json();
-      results[key] = d.chart.result[0].meta.regularMarketPrice;
+      let price = d.chart.result[0].meta.regularMarketPrice;
+      // Convert GLDM share price to approximate gold oz price (GLDM ≈ 1/50th oz)
+      if (key === 'gold') price = price * 50;
+      results[key] = price;
     } catch(e) {
       results[key] = null;
     }
