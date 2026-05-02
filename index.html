@@ -395,6 +395,7 @@ function updateDCATracker() {
 }
 
 
+async function fetchData() {
   document.getElementById('last-updated').textContent = 'Fetching live data...';
   const syms = { tsy30: '^TYX', dxy: 'DX-Y.NYB', gold: 'GC=F', tsy10: '^TNX', spy: '^GSPC' };
   const proxy = 'https://corsproxy.io/?';
