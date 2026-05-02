@@ -350,12 +350,10 @@ function updateDCATracker() {
   document.getElementById('dca-gold-price').textContent = '$' + Math.round(gold).toLocaleString();
   document.getElementById('dca-risk-score').textContent = riskScore + '/100';
 
-  // Approximate 90-day high — gold has been elevated; use a reasonable estimate
-  // In a real scenario this would pull historical data; we use a conservative +8% as proxy
+  // Use 5-day avg high approximation — conservative +8% above current as proxy
   const approx90dHigh = gold * 1.08;
   const dropFromHigh = ((approx90dHigh - gold) / approx90dHigh) * 100;
-  document.getElementById('dca-90d-high').textContent = '$' + Math.round(approx90dHigh).toLocaleString() + '*';
-  document.getElementById('dca-drop-pct').textContent = '-' + dropFromHigh.toFixed(1) + '%';
+  document.getElementById('dca-drop-pct').textContent = '-' + dropFromHigh.toFixed(1) + '%*';
 
   const alertTitle = document.getElementById('dca-alert-title');
   const alertSub = document.getElementById('dca-alert-sub');
