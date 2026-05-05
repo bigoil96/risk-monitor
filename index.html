@@ -426,10 +426,10 @@ async function fetchData() {
   }
 
   // Fetch Gold and DXY from Yahoo
-  const yahooSyms = { gold: 'GC=F', dxy: 'DX-Y.NYB' };
+  const yahooSyms = { gold: 'GC%3DF', dxy: 'DX-Y.NYB' };
   await Promise.all(Object.entries(yahooSyms).map(async ([key, sym]) => {
     try {
-      const url = 'https://corsproxy.io/?' + encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`);
+      const url = 'https://corsproxy.io/?url=https://query2.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d';
       const r = await fetch(url);
       const d = await r.json();
       results[key] = d.chart.result[0].meta.regularMarketPrice;
