@@ -413,20 +413,28 @@ async function fetchData() {
     }
   }));
 
-  // Fetch DXY, GLDM, SPY from Yahoo Finance with v7 endpoint
-  const yahoSyms = { dxy: 'DX-Y.NYB', gold: 'GLDM', spy: '^GSPC' };
-  await Promise.all(Object.entries(yahoSyms).map(async ([key, sym]) => {
+  // Fetch DXY, Gold, S&P from FRED
+  const fredMarket = {
+    dxy: 'DTWEXBGS',      // Broad dollar index
+    goldRaw: 'GOLDAMGBD228NLBM',  // Gold price USD per troy oz
+    spy: 'SP500'           // S&P 500
+  };
+  await Promise.all(Object.entries(fredMarket).map(async ([key, series]) => {
     try {
-      const url = proxy + encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`);
+      const url = proxy + encodeURIComponent(`https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`);
       const r = await fetch(url);
       const d = await r.json();
-      let price = d.chart.result[0].meta.regularMarketPrice;
-      if (key === 'gold') price = price * 50;
-      results[key] = price;
+      const obs = d.observations.find(o => o.value !== '.');
+      results[key] = parseFloat(obs.value);
     } catch(e) {
       results[key] = null;
     }
   }));
+  // Map goldRaw to gold key
+  if (results.goldRaw) { results.gold = results.goldRaw; }
+
+  // Try Yahoo for GLDM 90d history (used for DCA trigger only, not display)
+  // DXY, gold, spy now come from FRED above
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
   try {
@@ -465,11 +473,12 @@ async function fetchData() {
   }
   if (dxy) {
     const v = dxy.toFixed(1);
-    const cls = dxy < 98 ? 'badge-danger' : dxy < 102 ? 'badge-watch' : 'badge-normal';
-    const lbl = dxy < 98 ? 'Weak' : dxy < 102 ? 'Watch' : 'Normal';
+    // FRED broad dollar index — neutral ~115, weak <110, danger <106
+    const cls = dxy < 106 ? 'badge-danger' : dxy < 110 ? 'badge-watch' : 'badge-normal';
+    const lbl = dxy < 106 ? 'Weak' : dxy < 110 ? 'Watch' : 'Normal';
     setInd('v-dxy','s-dxy', v, lbl, cls);
-    document.getElementById('t1-dxy').textContent = 'DXY ' + v;
-    document.getElementById('d-dxy').style.background = dxy < 98 ? 'var(--red)' : dxy < 102 ? 'var(--amber)' : 'var(--green)';
+    document.getElementById('t1-dxy').textContent = 'Broad $ ' + v;
+    document.getElementById('d-dxy').style.background = dxy < 106 ? 'var(--red)' : dxy < 110 ? 'var(--amber)' : 'var(--green)';
   }
   if (gold) {
     const v = '$' + Math.round(gold).toLocaleString();
@@ -506,7 +515,7 @@ function updateOverallRisk() {
   let score = 0;
   const t = marketData;
   if (t.tsy30 > 5.5) score += 30; else if (t.tsy30 > 4.8) score += 15;
-  if (t.dxy && t.dxy < 98) score += 20; else if (t.dxy && t.dxy < 102) score += 10;
+  if (t.dxy && t.dxy < 106) score += 20; else if (t.dxy && t.dxy < 110) score += 10;
   if (t.gold && t.gold > 3500) score += 25; else if (t.gold && t.gold > 3000) score += 15;
   if (t.hy > 500) score += 25; else if (t.hy > 400) score += 10;
   if (t.tsy10 && t.tsy10 > 4.8) score += 10;
