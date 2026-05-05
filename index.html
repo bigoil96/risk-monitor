@@ -425,21 +425,31 @@ async function fetchData() {
     results.spy = null;
   }
 
-  // Fetch Gold and DXY from Yahoo — encode full URL after corsproxy.io/?
-  const yahooFetches = [
-    { key: 'gold', url: 'https://query2.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=5d' },
-    { key: 'dxy',  url: 'https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=5d' }
-  ];
-  await Promise.all(yahooFetches.map(async ({ key, url }) => {
-    try {
-      const proxied = 'https://corsproxy.io/?' + encodeURIComponent(url);
-      const r = await fetch(proxied);
-      const d = await r.json();
-      results[key] = d.chart.result[0].meta.regularMarketPrice;
-    } catch(e) {
-      results[key] = null;
-    }
-  }));
+  // Fetch Gold from FRED via thingproxy (handles longer URLs better)
+  try {
+    const goldUrl = `https://api.stlouisfed.org/fred/series/observations?series_id=GOLDAMGBD228NLBM&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`;
+    const r = await fetch('https://thingproxy.freeboard.io/fetch/' + goldUrl);
+    const d = await r.json();
+    const obs = d.observations.find(o => o.value !== '.');
+    results.gold = parseFloat(obs.value);
+  } catch(e) {
+    results.gold = null;
+  }
+
+  // Fetch DXY approximation from Frankfurter (free, CORS-enabled, no key needed)
+  // DXY is primarily EUR/USD weighted — we derive it from EUR/USD rate
+  // DXY ≈ 50.14348112 * (1/EURUSD) + other components; EUR is ~57.6% of DXY
+  // Simple approximation: when EUR/USD = 1.09, DXY ≈ 100
+  try {
+    const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
+    const d = await r.json();
+    const eurUsd = d.rates.EUR;
+    // Approximate DXY: inverse relationship with EUR/USD
+    // EUR/USD 1.09 ≈ DXY 100; EUR/USD 1.04 ≈ DXY 105; EUR/USD 1.14 ≈ DXY 95
+    results.dxy = Math.round((1.09 / eurUsd) * 100 * 10) / 10;
+  } catch(e) {
+    results.dxy = null;
+  }
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
   try {
