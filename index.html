@@ -313,7 +313,7 @@ function setInd(valId, statusId, value, status, cls) {
 async function fetchGold90dHigh() {
   const proxy = 'https://corsproxy.io/?';
   try {
-    const url = proxy + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GLDM?interval=1d&range=3mo');
+    const url = proxy + encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/GLDM?interval=1d&range=3mo');
     const r = await fetch(url);
     const d = await r.json();
     const closes = d.chart.result[0].indicators.quote[0].close;
@@ -392,13 +392,32 @@ const FRED_API_KEY = 'e009c048723673a26fda0f7aaef4f060';
 
 async function fetchData() {
   document.getElementById('last-updated').textContent = 'Fetching live data...';
-  const syms = { tsy30: '^TYX', dxy: 'DX-Y.NYB', gold: 'GLDM', tsy10: '^TNX', spy: '^GSPC' };
   const proxy = 'https://corsproxy.io/?';
-
   const results = {};
-  await Promise.all(Object.entries(syms).map(async ([key, sym]) => {
+
+  // Fetch Treasury yields from FRED (most reliable source)
+  const fredSeries = {
+    tsy30: 'DGS30',
+    tsy10: 'DGS10'
+  };
+  await Promise.all(Object.entries(fredSeries).map(async ([key, series]) => {
     try {
-      const url = proxy + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d');
+      const url = proxy + encodeURIComponent(`https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`);
+      const r = await fetch(url);
+      const d = await r.json();
+      // Get most recent non-null value
+      const obs = d.observations.find(o => o.value !== '.');
+      results[key] = parseFloat(obs.value);
+    } catch(e) {
+      results[key] = null;
+    }
+  }));
+
+  // Fetch DXY, GLDM, SPY from Yahoo Finance with v7 endpoint
+  const yahoSyms = { dxy: 'DX-Y.NYB', gold: 'GLDM', spy: '^GSPC' };
+  await Promise.all(Object.entries(yahoSyms).map(async ([key, sym]) => {
+    try {
+      const url = proxy + encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`);
       const r = await fetch(url);
       const d = await r.json();
       let price = d.chart.result[0].meta.regularMarketPrice;
