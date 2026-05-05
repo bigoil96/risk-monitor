@@ -425,12 +425,15 @@ async function fetchData() {
     results.spy = null;
   }
 
-  // Fetch Gold and DXY from Yahoo
-  const yahooSyms = { gold: 'GC%3DF', dxy: 'DX-Y.NYB' };
-  await Promise.all(Object.entries(yahooSyms).map(async ([key, sym]) => {
+  // Fetch Gold and DXY from Yahoo — encode full URL after corsproxy.io/?
+  const yahooFetches = [
+    { key: 'gold', url: 'https://query2.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=5d' },
+    { key: 'dxy',  url: 'https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=5d' }
+  ];
+  await Promise.all(yahooFetches.map(async ({ key, url }) => {
     try {
-      const url = 'https://corsproxy.io/?url=https://query2.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d';
-      const r = await fetch(url);
+      const proxied = 'https://corsproxy.io/?' + encodeURIComponent(url);
+      const r = await fetch(proxied);
       const d = await r.json();
       results[key] = d.chart.result[0].meta.regularMarketPrice;
     } catch(e) {
