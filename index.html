@@ -413,36 +413,30 @@ async function fetchData() {
     }
   }));
 
-  // Fetch Gold and S&P from FRED
-  const fredMarket = {
-    goldRaw: 'GOLDAMGBD228NLBM',
-    spy: 'SP500'
-  };
-  await Promise.all(Object.entries(fredMarket).map(async ([key, series]) => {
+  // Fetch S&P from FRED
+  try {
+    const fredBase = `https://api.stlouisfed.org/fred/series/observations?series_id=SP500&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`;
+    const url = 'https://corsproxy.io/?' + encodeURIComponent(fredBase);
+    const r = await fetch(url);
+    const d = await r.json();
+    const obs = d.observations.find(o => o.value !== '.');
+    results.spy = parseFloat(obs.value);
+  } catch(e) {
+    results.spy = null;
+  }
+
+  // Fetch Gold and DXY from Yahoo
+  const yahooSyms = { gold: 'GC=F', dxy: 'DX-Y.NYB' };
+  await Promise.all(Object.entries(yahooSyms).map(async ([key, sym]) => {
     try {
-      const fredBase = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`;
-      const url = 'https://corsproxy.io/?' + encodeURIComponent(fredBase);
+      const url = 'https://corsproxy.io/?' + encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`);
       const r = await fetch(url);
       const d = await r.json();
-      const obs = d.observations.find(o => o.value !== '.');
-      results[key] = parseFloat(obs.value);
+      results[key] = d.chart.result[0].meta.regularMarketPrice;
     } catch(e) {
       results[key] = null;
     }
   }));
-  if (results.goldRaw) { results.gold = results.goldRaw; }
-
-  // Fetch DXY from Yahoo (correct ~98-105 scale)
-  try {
-    const dxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=5d');
-    const dr = await fetch(dxyUrl);
-    const dd = await dr.json();
-    results.dxy = dd.chart.result[0].meta.regularMarketPrice;
-  } catch(e) {
-    results.dxy = null;
-  }
-
-  // Try Yahoo for GLDM 90d history (used for DCA trigger only, not display)
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
   try {
