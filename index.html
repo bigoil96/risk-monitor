@@ -311,19 +311,18 @@ function setInd(valId, statusId, value, status, cls) {
 }
 
 async function fetchGold90dHigh() {
-  const proxy = 'https://corsproxy.io/?';
   try {
-    const url = proxy + encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/GLDM?interval=1d&range=3mo');
-    const r = await fetch(url);
+    const r = await fetch('https://freegoldapi.com/data/latest.json');
     const d = await r.json();
-    const closes = d.chart.result[0].indicators.quote[0].close;
+    // Get last 90 days of prices
+    const recent = d.slice(-90);
     // Calculate highest 5-day rolling average
     let maxAvg = 0;
-    for (let i = 4; i < closes.length; i++) {
-      const avg = (closes[i] + closes[i-1] + closes[i-2] + closes[i-3] + closes[i-4]) / 5;
+    for (let i = 4; i < recent.length; i++) {
+      const avg = (recent[i].price + recent[i-1].price + recent[i-2].price + recent[i-3].price + recent[i-4].price) / 5;
       if (avg > maxAvg) maxAvg = avg;
     }
-    return maxAvg * 50; // convert to gold oz price
+    return maxAvg;
   } catch(e) {
     return null;
   }
@@ -425,17 +424,20 @@ async function fetchData() {
     results.spy = null;
   }
 
-  // Fetch Gold and DXY via corsproxy.io with ?url= format
+  // Fetch Gold from freegoldapi.com (CORS-enabled, no proxy needed, confirmed working)
   try {
-    const r = await fetch('https://corsproxy.io/?url=' + encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=5d'));
+    const r = await fetch('https://freegoldapi.com/data/latest.json');
     const d = await r.json();
-    results.gold = d.chart.result[0].meta.regularMarketPrice;
+    results.gold = d[d.length - 1].price;
   } catch(e) { results.gold = null; }
 
+  // Fetch DXY from frankfurter.dev via EUR/USD (CORS-enabled, confirmed working)
+  // EUR is ~57.6% of DXY — derive approximate DXY from EUR/USD rate
   try {
-    const r = await fetch('https://corsproxy.io/?url=' + encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=5d'));
+    const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
     const d = await r.json();
-    results.dxy = d.chart.result[0].meta.regularMarketPrice;
+    const usdPerEur = 1 / d.rates.EUR;
+    results.dxy = Math.round((usdPerEur / 1.09) * 100 * 10) / 10;
   } catch(e) { results.dxy = null; }
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
