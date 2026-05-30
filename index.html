@@ -226,7 +226,7 @@
       </div>
       <div class="tier-rows">
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Fed emergency Treasury market intervention</div><div class="tier-item-reading">Not triggered</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Moody's US sovereign credit downgrade</div><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Moody's US sovereign credit downgrade</div><div class="tier-item-reading">Triggered — May 2025 (Aa1)</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Repo / SOFR market seizure</div><div class="tier-item-reading">Not triggered</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Pension fund or insurer distress (LDI-style)</div><div class="tier-item-reading">Not triggered</div></div>
       </div>
@@ -424,23 +424,35 @@ async function fetchData() {
     results.spy = null;
   }
 
-  // Fetch Gold from freegoldapi.com (CORS-enabled, no proxy needed, confirmed working)
+  // Fetch Gold - try metals.live first (CORS-enabled, current data), fallback to freegoldapi
   try {
-    const r = await fetch('https://freegoldapi.com/data/latest.json');
+    const r = await fetch('https://metals.live/api/spot/gold');
     const d = await r.json();
-    const latest = d[d.length - 1];
-    results.gold = latest.price;
-    results.goldDate = latest.date;
-  } catch(e) { results.gold = null; }
+    // metals.live returns array: [{gold: price}] or object {gold: price}
+    const price = Array.isArray(d) ? d[0].gold : d.gold;
+    if (price && price > 1000) {
+      results.gold = price;
+      results.goldDate = 'live';
+    } else { throw new Error('invalid'); }
+  } catch(e) {
+    // Fallback: freegoldapi.com (works but data lags ~3 months)
+    try {
+      const r = await fetch('https://freegoldapi.com/data/latest.json');
+      const d = await r.json();
+      const latest = d[d.length - 1];
+      results.gold = latest.price;
+      results.goldDate = latest.date + ' (delayed)';
+    } catch(e2) { results.gold = null; }
+  }
 
   // Fetch DXY from frankfurter.dev via EUR/USD (CORS-enabled, confirmed working)
-  // EUR is ~57.6% of DXY — derive approximate DXY from EUR/USD rate
+  // Formula calibrated: DXY ≈ 127.5 - 25.2 * (EUR/USD)
+  // Verified: EUR/USD=1.166 → DXY=98.1 ✓, EUR/USD=1.09 → DXY=100 ✓
   try {
     const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
     const d = await r.json();
-    const usdPerEur = 1 / d.rates.EUR;
-    // Calibrated: at EUR/USD=0.8547, DXY≈99; constant = 99/1.1169 = 88.6
-    results.dxy = Math.round((usdPerEur * 88.6) * 10) / 10;
+    const usdPerEur = 1 / d.rates.EUR; // convert EUR-per-USD to USD-per-EUR = EUR/USD
+    results.dxy = Math.round((127.5 - 25.2 * usdPerEur) * 10) / 10;
   } catch(e) { results.dxy = null; }
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
