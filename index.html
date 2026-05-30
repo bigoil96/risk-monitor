@@ -424,36 +424,35 @@ async function fetchData() {
     results.spy = null;
   }
 
-  // Fetch Gold - try metals.live first (CORS-enabled, current data), fallback to freegoldapi
-  try {
-    const r = await fetch('https://metals.live/api/spot/gold');
-    const d = await r.json();
-    // metals.live returns array: [{gold: price}] or object {gold: price}
-    const price = Array.isArray(d) ? d[0].gold : d.gold;
-    if (price && price > 1000) {
-      results.gold = price;
-      results.goldDate = 'live';
-    } else { throw new Error('invalid'); }
-  } catch(e) {
-    // Fallback: freegoldapi.com (works but data lags ~3 months)
-    try {
-      const r = await fetch('https://freegoldapi.com/data/latest.json');
-      const d = await r.json();
-      const latest = d[d.length - 1];
-      results.gold = latest.price;
-      results.goldDate = latest.date + ' (delayed)';
-    } catch(e2) { results.gold = null; }
-  }
+  const AV_KEY = 'XO2H1EHRTK5N8UBK';
 
-  // Fetch DXY from frankfurter.dev via EUR/USD (CORS-enabled, confirmed working)
-  // Formula calibrated: DXY ≈ 127.5 - 25.2 * (EUR/USD)
-  // Verified: EUR/USD=1.166 → DXY=98.1 ✓, EUR/USD=1.09 → DXY=100 ✓
+  // Fetch GLDM price from Alpha Vantage (free, CORS-enabled, real-time)
   try {
-    const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
+    const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLDM&apikey=${AV_KEY}`);
     const d = await r.json();
-    const usdPerEur = 1 / d.rates.EUR; // convert EUR-per-USD to USD-per-EUR = EUR/USD
-    results.dxy = Math.round((127.5 - 25.2 * usdPerEur) * 10) / 10;
-  } catch(e) { results.dxy = null; }
+    const price = parseFloat(d['Global Quote']['05. price']);
+    if (price && price > 0) {
+      results.gold = price * 50; // GLDM × 50 = approx gold oz price
+      results.goldDate = 'live (GLDM)';
+    }
+  } catch(e) { results.gold = null; }
+
+  // Fetch EUR/USD from Alpha Vantage for accurate DXY approximation
+  try {
+    const r = await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=EUR&to_currency=USD&apikey=${AV_KEY}`);
+    const d = await r.json();
+    const eurUsd = parseFloat(d['Realtime Currency Exchange Rate']['5. Exchange Rate']);
+    // DXY ≈ 127.5 - 25.2 * EUR/USD (calibrated: EUR/USD=1.09 → DXY=100)
+    results.dxy = Math.round((127.5 - 25.2 * eurUsd) * 10) / 10;
+  } catch(e) {
+    // Fallback to frankfurter if Alpha Vantage fails
+    try {
+      const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
+      const d = await r.json();
+      const usdPerEur = 1 / d.rates.EUR;
+      results.dxy = Math.round((127.5 - 25.2 * usdPerEur) * 10) / 10;
+    } catch(e2) { results.dxy = null; }
+  }
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
   try {
@@ -508,7 +507,7 @@ async function fetchData() {
     document.getElementById('d-gold').style.background = gold > 3000 ? 'var(--amber)' : 'var(--green)';
     // Show data date in subtitle
     const goldSub = document.querySelector('#indicators-grid .ind-card:nth-child(4) .ind-sub');
-    if (goldSub && results.goldDate) goldSub.textContent = 'As of ' + results.goldDate;
+    if (goldSub && results.goldDate) goldSub.textContent = results.goldDate === 'live (GLDM)' ? 'Live via GLDM × 50' : 'As of ' + results.goldDate;
   }
   if (spy) {
     const v = Math.round(spy).toLocaleString();
