@@ -214,7 +214,7 @@
       </div>
       <div class="tier-rows">
         <div class="tier-row"><div class="tier-dot" id="d-30y" style="background:var(--green)"></div><div class="tier-item-text">30-yr Treasury yield above 5.5% sustained</div><div class="tier-item-reading" id="t2-30y">—</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">HY credit spreads blowing out (OAS &gt; 500 bps)</div><div class="tier-item-reading">~320 bps — OK</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">HY credit spreads blowing out (OAS &gt; 500 bps)</div><div class="tier-item-reading" id="t2-hy">— bps — loading</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Weak or failed Treasury auction (large tail)</div><div class="tier-item-reading">Monitor post-auction</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Yen carry trade unwind — USD/JPY rapid move</div><div class="tier-item-reading">Monitor USD/JPY</div></div>
       </div>
@@ -225,6 +225,7 @@
         <span class="tier-desc">Acute crisis signals — act quickly if triggered</span>
       </div>
       <div class="tier-rows">
+        <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Active US-Iran military conflict — Strait of Hormuz</div><div class="tier-item-reading">Ongoing Jul 2026</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Fed emergency Treasury market intervention</div><div class="tier-item-reading">Not triggered</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Moody's US sovereign credit downgrade</div><div class="tier-item-reading">Triggered — May 2025 (Aa1)</div></div>
         <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Repo / SOFR market seizure</div><div class="tier-item-reading">Not triggered</div></div>
@@ -312,20 +313,39 @@ function setInd(valId, statusId, value, status, cls) {
 }
 
 async function fetchGold90dHigh() {
+  // Use Alpha Vantage daily GLDM data for accurate 90-day rolling 5-day avg high
+  const AV_KEY = 'XO2H1EHRTK5N8UBK';
   try {
-    const r = await fetch('https://freegoldapi.com/data/latest.json');
+    const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=GLDM&outputsize=compact&apikey=${AV_KEY}`);
     const d = await r.json();
-    // Get last 90 days of prices
-    const recent = d.slice(-90);
+    const series = d['Time Series (Daily)'];
+    if (!series) throw new Error('No data');
+    // Get last 90 trading days of closing prices
+    const closes = Object.entries(series)
+      .sort((a,b) => new Date(b[0]) - new Date(a[0]))
+      .slice(0, 90)
+      .map(([,v]) => parseFloat(v['4. close']) * 50) // convert GLDM to gold oz equiv
+      .reverse();
     // Calculate highest 5-day rolling average
     let maxAvg = 0;
-    for (let i = 4; i < recent.length; i++) {
-      const avg = (recent[i].price + recent[i-1].price + recent[i-2].price + recent[i-3].price + recent[i-4].price) / 5;
+    for (let i = 4; i < closes.length; i++) {
+      const avg = (closes[i] + closes[i-1] + closes[i-2] + closes[i-3] + closes[i-4]) / 5;
       if (avg > maxAvg) maxAvg = avg;
     }
     return maxAvg;
   } catch(e) {
-    return null;
+    // Fallback: freegoldapi (may be stale)
+    try {
+      const r = await fetch('https://freegoldapi.com/data/latest.json');
+      const d = await r.json();
+      const recent = d.slice(-90);
+      let maxAvg = 0;
+      for (let i = 4; i < recent.length; i++) {
+        const avg = (recent[i].price + recent[i-1].price + recent[i-2].price + recent[i-3].price + recent[i-4].price) / 5;
+        if (avg > maxAvg) maxAvg = avg;
+      }
+      return maxAvg;
+    } catch(e2) { return null; }
   }
 }
 
@@ -526,6 +546,9 @@ async function fetchData() {
     hyBadge.textContent = hyLbl;
     hyBadge.style.background = hy > 500 ? 'var(--red-bg)' : hy > 400 ? 'var(--amber-bg)' : 'var(--green-bg)';
     hyBadge.style.color = hy > 500 ? 'var(--red)' : hy > 400 ? 'var(--amber)' : 'var(--green)';
+    // Update Tier 2 HY reading with live value
+    const t2hy = document.getElementById('t2-hy');
+    if (t2hy) t2hy.textContent = Math.round(hy) + ' bps — ' + (hy < 350 ? 'OK' : hy < 450 ? 'Watch' : 'Stress');
   }
 
   updateOverallRisk();
@@ -536,21 +559,34 @@ async function fetchData() {
 function updateOverallRisk() {
   let score = 0;
   const t = marketData;
-  if (t.tsy30 > 5.5) score += 30; else if (t.tsy30 > 4.8) score += 15;
-  if (t.dxy && t.dxy < 98) score += 20; else if (t.dxy && t.dxy < 102) score += 10;
-  if (t.gold && t.gold > 3500) score += 25; else if (t.gold && t.gold > 3000) score += 15;
-  if (t.hy > 500) score += 25; else if (t.hy > 400) score += 10;
-  if (t.tsy10 && t.tsy10 > 4.8) score += 10;
+
+  // Treasury yields (max 25)
+  if (t.tsy30 > 5.5) score += 25; else if (t.tsy30 > 5.0) score += 18; else if (t.tsy30 > 4.8) score += 12;
+  if (t.tsy10 && t.tsy10 > 4.8) score += 8; else if (t.tsy10 && t.tsy10 > 4.5) score += 4;
+
+  // Dollar weakness (max 20)
+  if (t.dxy && t.dxy < 98) score += 20; else if (t.dxy && t.dxy < 100) score += 14; else if (t.dxy && t.dxy < 102) score += 8;
+
+  // Gold elevation (max 15)
+  if (t.gold && t.gold > 4500) score += 15; else if (t.gold && t.gold > 3500) score += 10; else if (t.gold && t.gold > 3000) score += 6;
+
+  // HY credit spreads (max 20)
+  if (t.hy > 500) score += 20; else if (t.hy > 400) score += 12; else if (t.hy > 320) score += 5;
+
+  // Structural signals — already triggered (max 20)
+  score += 8;  // Moody's downgrade triggered May 2025
+  score += 7;  // Active US-Iran military conflict Jul 2026
+
   score = Math.min(score, 100);
 
   const bar = document.getElementById('risk-bar');
   bar.style.width = score + '%';
-  bar.style.background = score > 65 ? 'var(--red)' : score > 35 ? 'var(--amber)' : 'var(--green)';
+  bar.style.background = score > 65 ? 'var(--red)' : score > 45 ? 'var(--amber)' : 'var(--green)';
   document.getElementById('risk-score').innerHTML = score + '<span>/100</span>';
 
-  const label = score > 65 ? 'High — consider defensive action' : score > 35 ? 'Elevated — monitor closely' : 'Moderate — maintain positioning';
-  const badge = score > 65 ? 'High' : score > 35 ? 'Elevated' : 'Moderate';
-  const badgeCls = score > 65 ? 'badge-danger' : score > 35 ? 'badge-watch' : 'badge-normal';
+  const label = score > 65 ? 'High — consider defensive action' : score > 45 ? 'Elevated — monitor closely' : 'Moderate — maintain positioning';
+  const badge = score > 65 ? 'High' : score > 45 ? 'Elevated' : 'Moderate';
+  const badgeCls = score > 65 ? 'badge-danger' : score > 45 ? 'badge-watch' : 'badge-normal';
   document.getElementById('risk-status-label').textContent = label;
   const b = document.getElementById('risk-status-badge');
   b.textContent = badge;
