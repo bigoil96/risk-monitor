@@ -125,6 +125,11 @@
   .tier-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .tier-item-text { flex: 1; font-size: 14px; color: var(--text2); }
   .tier-item-reading { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+  .tier-status { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .status-live { background: var(--green-bg); color: var(--green); }
+  .status-model { background: var(--blue-bg); color: var(--blue); }
+  .status-manual { background: var(--bg3); color: var(--text3); }
+  .status-note { background: var(--amber-bg); color: var(--amber); }
 
   .analysis-section { margin-bottom: 32px; }
   .analysis-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-height: 100px; }
@@ -213,19 +218,19 @@
 <div class="main">
   <div class="hero">
     <h1>Debt cycle <span>risk assessment</span></h1>
-    <p>Dalio framework — Tier 1 / 2 / 3 signal tracking &amp; weekly portfolio briefing</p>
+    <p>Dalio-inspired framework — structural reset risk, bubble risk, and tactical stress overlay</p>
   </div>
 
   <div class="overall-risk">
     <div class="risk-header">
-      <span class="risk-title">Overall risk score</span>
+      <span class="risk-title">Tactical stress overlay</span>
       <span class="risk-score-display" id="risk-score">—<span>/100</span></span>
     </div>
     <div class="risk-bar-track">
       <div class="risk-bar-fill" id="risk-bar" style="width:0%"></div>
     </div>
     <div class="risk-status-row">
-      <span class="risk-status-label" id="risk-status-label">Loading market data...</span>
+      <span class="risk-status-label" id="risk-status-label">Secondary confirmation layer — loading market data...</span>
       <span class="risk-status-badge badge-loading" id="risk-status-badge">—</span>
     </div>
   </div>
@@ -293,53 +298,52 @@
     <div class="risk-history-footer" id="risk-history-footer">Loading monthly risk history...</div>
   </div>
 
-  <div class="section-label">Live market indicators</div>
+  <div class="section-label">Tactical stress indicators</div>
   <div class="indicators-grid" id="indicators-grid">
     <div class="ind-card"><div class="ind-name">30-yr Treasury yield</div><div class="ind-val" id="v-tsy">—</div><div class="ind-sub">Danger zone &gt; 5.5%</div><span class="ind-badge badge-loading" id="s-tsy">—</span></div>
     <div class="ind-card"><div class="ind-name">10-yr Treasury yield</div><div class="ind-val" id="v-10y">—</div><div class="ind-sub">Curve steepening watch</div><span class="ind-badge badge-loading" id="s-10y">—</span></div>
-    <div class="ind-card"><div class="ind-name">Dollar index (DXY)</div><div class="ind-val" id="v-dxy">—</div><div class="ind-sub">Watch for sustained fall</div><span class="ind-badge badge-loading" id="s-dxy">—</span></div>
+    <div class="ind-card"><div class="ind-name">Dollar confidence proxy</div><div class="ind-val" id="v-dxy">—</div><div class="ind-sub">EUR/USD-derived proxy, not official DXY</div><span class="ind-badge badge-loading" id="s-dxy">—</span></div>
     <div class="ind-card"><div class="ind-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub">Systemic hedge signal &gt; $3,000</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
-    <div class="ind-card"><div class="ind-name">S&amp;P 500</div><div class="ind-val" id="v-spy">—</div><div class="ind-sub">Bubble valuation watch</div><span class="ind-badge badge-loading" id="s-spy">—</span></div>
-    <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">~ 320 bps</div><div class="ind-sub">Danger zone &gt; 500 bps</div><div style="margin-top:6px;"><span class="ind-badge" id="s-hy" style="position:static;display:inline-block;background:var(--green-bg);color:var(--green);">Contained</span></div></div>
+    <div class="ind-card"><div class="ind-name">S&amp;P 500 level</div><div class="ind-val" id="v-spy">—</div><div class="ind-sub">Context only — valuation proxy scored above</div><span class="ind-badge badge-loading" id="s-spy">—</span></div>
+    <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">—</div><div class="ind-sub">Danger zone &gt; 500 bps</div><div style="margin-top:6px;"><span class="ind-badge badge-loading" id="s-hy" style="position:static;display:inline-block;">Unavailable</span></div></div>
   </div>
 
-  <div class="section-label">Tier signal tracker</div>
+  <div class="section-label">Tactical stress signal tracker</div>
   <div class="tiers">
     <div class="tier-block">
       <div class="tier-header">
-        <span class="tier-tag tier-tag-1">Tier 1</span>
-        <span class="tier-desc">Already elevated — watch for acceleration</span>
+        <span class="tier-tag tier-tag-1">Structural pressure</span>
+        <span class="tier-desc">Slow-moving debt-reset background pressure</span>
       </div>
       <div class="tier-rows">
-        <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Treasury term premium rising (NY Fed ACM model)</div><div class="tier-item-reading">Elevated</div></div>
-        <div class="tier-row"><div class="tier-dot" id="d-dxy" style="background:var(--amber)"></div><div class="tier-item-text">Dollar index sustained weakness</div><div class="tier-item-reading" id="t1-dxy">—</div></div>
-        <div class="tier-row"><div class="tier-dot" id="d-gold" style="background:var(--amber)"></div><div class="tier-item-text">Gold holding above $3,000 despite high real rates</div><div class="tier-item-reading" id="t1-gold">—</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Foreign Treasury selling — TIC report (monthly)</div><div class="tier-item-reading">Check TIC.gov</div></div>
+        <div class="tier-row"><div class="tier-dot" id="d-30y" style="background:var(--green)"></div><div class="tier-item-text">30-yr Treasury yield / term-premium pressure</div><span class="tier-status status-live">Live</span><div class="tier-item-reading" id="t2-30y">—</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Foreign Treasury demand — TIC report</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">Check monthly</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Treasury auction tails / weak demand</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">Monitor auctions</div></div>
       </div>
     </div>
     <div class="tier-block">
       <div class="tier-header">
-        <span class="tier-tag tier-tag-2">Tier 2</span>
-        <span class="tier-desc">Not yet triggered — key escalation signals</span>
+        <span class="tier-tag tier-tag-2">Market confirmation</span>
+        <span class="tier-desc">Are markets confirming stress or loss of confidence?</span>
       </div>
       <div class="tier-rows">
-        <div class="tier-row"><div class="tier-dot" id="d-30y" style="background:var(--green)"></div><div class="tier-item-text">30-yr Treasury yield above 5.5% sustained</div><div class="tier-item-reading" id="t2-30y">—</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">HY credit spreads blowing out (OAS &gt; 500 bps)</div><div class="tier-item-reading" id="t2-hy">— bps — loading</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Weak or failed Treasury auction (large tail)</div><div class="tier-item-reading">Monitor post-auction</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Yen carry trade unwind — USD/JPY rapid move</div><div class="tier-item-reading">Monitor USD/JPY</div></div>
+        <div class="tier-row"><div class="tier-dot" id="d-dxy" style="background:var(--amber)"></div><div class="tier-item-text">Dollar confidence proxy sustained weakness</div><span class="tier-status status-live">Live proxy</span><div class="tier-item-reading" id="t1-dxy">—</div></div>
+        <div class="tier-row"><div class="tier-dot" id="d-gold" style="background:var(--amber)"></div><div class="tier-item-text">Gold strength / hedge-demand confirmation</div><span class="tier-status status-live">Live proxy</span><div class="tier-item-reading" id="t1-gold">—</div></div>
+        <div class="tier-row"><div class="tier-dot" id="d-hy" style="background:var(--green)"></div><div class="tier-item-text">HY credit spreads blowing out (OAS &gt; 500 bps)</div><span class="tier-status status-live">Live</span><div class="tier-item-reading" id="t2-hy">—</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Yen carry trade unwind — USD/JPY rapid move</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">Monitor USD/JPY</div></div>
       </div>
     </div>
     <div class="tier-block">
       <div class="tier-header">
-        <span class="tier-tag tier-tag-3">Tier 3</span>
-        <span class="tier-desc">Acute crisis signals — act quickly if triggered</span>
+        <span class="tier-tag tier-tag-3">Crisis triggers</span>
+        <span class="tier-desc">Manual act-fast signals; not hard-coded into score</span>
       </div>
       <div class="tier-rows">
-        <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Active US-Iran military conflict — Strait of Hormuz</div><div class="tier-item-reading">Ongoing Jul 2026</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Fed emergency Treasury market intervention</div><div class="tier-item-reading">Not triggered</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--amber)"></div><div class="tier-item-text">Moody's US sovereign credit downgrade</div><div class="tier-item-reading">Triggered — May 2025 (Aa1)</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Repo / SOFR market seizure</div><div class="tier-item-reading">Not triggered</div></div>
-        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Pension fund or insurer distress (LDI-style)</div><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Fed emergency Treasury market intervention</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Repo / SOFR market seizure</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">Not triggered</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Major geopolitical shock affecting oil, dollar, or Treasuries</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">No trigger set</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--text3)"></div><div class="tier-item-text">Moody's US sovereign credit downgrade</div><span class="tier-status status-note">Historical note</span><div class="tier-item-reading">May 2025 — not recurring score input</div></div>
+        <div class="tier-row"><div class="tier-dot" style="background:var(--green)"></div><div class="tier-item-text">Pension fund or insurer distress (LDI-style)</div><span class="tier-status status-manual">Manual</span><div class="tier-item-reading">Not triggered</div></div>
       </div>
     </div>
   </div>
@@ -365,7 +369,7 @@
       <div class="dca-stat"><div class="dca-stat-label">Current gold</div><div class="dca-stat-val" id="dca-gold-price">—</div><div class="dca-stat-sub">Live price</div></div>
       <div class="dca-stat"><div class="dca-stat-label">90d 5-day avg high</div><div class="dca-stat-val" id="dca-90d-ref">—</div><div class="dca-stat-sub">Trigger reference</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Drop from 90d high</div><div class="dca-stat-val" id="dca-drop-pct">—</div><div class="dca-stat-sub">10% / 20% triggers</div></div>
-      <div class="dca-stat"><div class="dca-stat-label">Risk score</div><div class="dca-stat-val" id="dca-risk-score">—</div><div class="dca-stat-sub">Pause if &lt; 40</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Reset Risk</div><div class="dca-stat-val" id="dca-risk-score">—</div><div class="dca-stat-sub">Gold thesis driver</div></div>
     </div>
 
     <!-- Schedule -->
@@ -384,13 +388,12 @@
 
     <!-- Rules reference -->
     <div class="dca-rules">
-      <div class="dca-rules-title">Decision rules — always applied on scheduled date or trigger fire</div>
-      <div class="dca-rule"><span class="dca-rule-trigger">No trigger, score ≥ 40</span><span class="dca-rule-action">Execute scheduled amount on first Monday of purchase month</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 10% from 5-day avg high in 90 days</span><span class="dca-rule-action">Execute 2x scheduled amount within 5 business days — skip next scheduled purchase</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Gold drops ≥ 20% from 5-day avg high in 90 days</span><span class="dca-rule-action">Execute 3x scheduled amount within 5 business days — skip next 2 scheduled purchases</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Single-day spike only (no sustained high)</span><span class="dca-rule-action">Ignore — use 5-day average to filter one-day geopolitical reactions</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Risk score drops below 40</span><span class="dca-rule-action">Pause 1 week on scheduled date — reassess thesis before executing</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">Trigger already fired this quarter</span><span class="dca-rule-action">Skip this scheduled purchase — acceleration already deployed capital</span></div>
+      <div class="dca-rules-title">Decision rules — governed by Reset Risk and GLDM drawdown trigger</div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Reset Risk Elevated/High</span><span class="dca-rule-action">Gold hedge thesis active; follow scheduled DCA unless a fresh acceleration trigger fires</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Reset Risk Low/Moderate for multiple months</span><span class="dca-rule-action">Reassess thesis before adding more; do not use the tactical overlay as the pause trigger</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">GLDM/gold ≥10% below 90d 5-day avg high</span><span class="dca-rule-action">Acceleration signal; after June acceleration, require cooldown test before buying again</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Post-acceleration cooldown</span><span class="dca-rule-action">No further acceleration unless Reset Risk moves High or GLDM falls another ~10% from $85.86 (~$77.27)</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">Single-day spike only</span><span class="dca-rule-action">Ignore — use 5-day average to filter one-day geopolitical reactions</span></div>
     </div>
 
   </div>
@@ -1668,24 +1671,37 @@ async function fetchGold90dHigh() {
   }
 }
 
+function getResetRiskGoldThesisStatus() {
+  const latest = buildCurrentMacroRiskSnapshot();
+  const hedgeActive = latest.resetRegime === 'Elevated' || latest.resetRegime === 'High';
+  return {
+    score: latest.resetScore,
+    regime: latest.resetRegime,
+    hedgeActive
+  };
+}
+
 function updateDCATracker() {
   const gold = marketData.gold;
   const peak = marketData.gold90dHigh;
-  const riskScore = parseInt(document.getElementById('risk-score').textContent) || 0;
+  const resetStatus = getResetRiskGoldThesisStatus();
+  const lastAcceleratedGldmPrice = 85.86;
+  const nextCooldownGldmPrice = lastAcceleratedGldmPrice * 0.90;
 
   if (!gold) return;
 
   document.getElementById('dca-gold-price').textContent = '$' + Math.round(gold).toLocaleString();
-  document.getElementById('dca-risk-score').textContent = riskScore + '/100';
+  document.getElementById('dca-risk-score').textContent = resetStatus.score.toFixed(1) + ' ' + resetStatus.regime;
 
-  // Use real 90d high if available, otherwise fall back to approximation
+  // Use real 90d high if available, otherwise fall back to approximation.
   const refHigh = peak || (gold * 1.08);
   const dropFromHigh = ((refHigh - gold) / refHigh) * 100;
   const dropDisplay = (dropFromHigh > 0 ? '-' : '+') + Math.abs(dropFromHigh).toFixed(1) + '%' + (peak ? '' : '*');
+  const currentGldmApprox = gold / 50;
+  const cooldownCleared = currentGldmApprox <= nextCooldownGldmPrice;
 
   document.getElementById('dca-drop-pct').textContent = dropDisplay;
 
-  // Show the actual reference price
   const refEl = document.getElementById('dca-90d-ref');
   if (refEl) refEl.textContent = '$' + Math.round(refHigh).toLocaleString() + (peak ? '' : '*');
 
@@ -1695,32 +1711,39 @@ function updateDCATracker() {
   const alertIcon = document.getElementById('dca-icon');
   const alertDiv = document.getElementById('dca-alert');
 
-  if (riskScore < 40) {
-    alertIcon.textContent = '⏸';
-    alertTitle.textContent = 'PAUSE — Risk score below 40';
-    alertSub.textContent = 'Macro hedge thesis weakening. Wait 1 week on next scheduled date and reassess before executing.';
-    alertBadge.textContent = 'Pause & Reassess';
+  if (!resetStatus.hedgeActive) {
+    alertIcon.textContent = '🔵';
+    alertTitle.textContent = 'Thesis watch — Reset Risk not Elevated/High';
+    alertSub.textContent = 'Do not use tactical overlay alone. Reassess scheduled buys only if Reset Risk stays Low/Moderate for multiple months.';
+    alertBadge.textContent = 'Reassess';
     alertBadge.className = 'dca-alert-badge alert-pause';
     alertDiv.style.borderLeft = '3px solid var(--blue)';
-  } else if (dropFromHigh >= 20) {
+  } else if (dropFromHigh >= 20 && (cooldownCleared || resetStatus.regime === 'High')) {
     alertIcon.textContent = '🔴';
-    alertTitle.textContent = 'TRIGGER FIRED — Gold down ≥20% from 90-day 5-day avg high';
-    alertSub.textContent = 'Execute 3x scheduled amount within 5 business days. Skip next 2 scheduled purchases.';
-    alertBadge.textContent = 'Accelerate 3x';
+    alertTitle.textContent = 'Fresh deep trigger — drawdown and cooldown criteria met';
+    alertSub.textContent = 'Review before acting. Reset Risk supports the hedge thesis and GLDM is roughly another 10% below the June acceleration price.';
+    alertBadge.textContent = 'Review Buy';
     alertBadge.className = 'dca-alert-badge alert-double';
     alertDiv.style.borderLeft = '3px solid var(--red)';
-  } else if (dropFromHigh >= 10) {
+  } else if (dropFromHigh >= 10 && (cooldownCleared || resetStatus.regime === 'High')) {
     alertIcon.textContent = '🟡';
-    alertTitle.textContent = 'TRIGGER FIRED — Gold down ≥10% from 90-day 5-day avg high';
-    alertSub.textContent = 'Execute 2x scheduled amount within 5 business days. Skip next scheduled purchase.';
-    alertBadge.textContent = 'Accelerate 2x';
+    alertTitle.textContent = 'Fresh acceleration trigger — cooldown criteria met';
+    alertSub.textContent = 'Review before acting. Current plan allows another acceleration only if Reset Risk is High or GLDM is near/below $77.27.';
+    alertBadge.textContent = 'Review Buy';
+    alertBadge.className = 'dca-alert-badge alert-accelerate';
+    alertDiv.style.borderLeft = '3px solid var(--amber)';
+  } else if (dropFromHigh >= 10) {
+    alertIcon.textContent = '🟠';
+    alertTitle.textContent = 'Drawdown trigger active, but cooldown says wait';
+    alertSub.textContent = 'You already accelerated two quarters. Hold unless Reset Risk moves High or GLDM falls another ~10% from $85.86 (~$77.27).';
+    alertBadge.textContent = 'Cooldown';
     alertBadge.className = 'dca-alert-badge alert-accelerate';
     alertDiv.style.borderLeft = '3px solid var(--amber)';
   } else {
     alertIcon.textContent = '🟢';
-    alertTitle.textContent = 'On schedule — no triggers fired';
-    alertSub.textContent = 'Execute scheduled amount on next purchase date. No acceleration warranted.';
-    alertBadge.textContent = 'On Schedule';
+    alertTitle.textContent = 'On plan — no fresh trigger';
+    alertSub.textContent = 'Reset Risk supports the hedge thesis. Next normal scheduled buy remains February 2027 unless a fresh trigger occurs.';
+    alertBadge.textContent = 'Wait';
     alertBadge.className = 'dca-alert-badge alert-execute';
     alertDiv.style.borderLeft = '3px solid var(--green)';
   }
@@ -1802,7 +1825,7 @@ async function fetchData() {
     const obs = fd.observations[0];
     results.hy = parseFloat(obs.value) * 100; // FRED returns in %, convert to bps
   } catch(e) {
-    results.hy = 320; // fallback
+    results.hy = null; // no silent fallback; show unavailable if FRED fails
   }
 
   // Fetch real 90-day 5-day rolling avg high for GLDM trigger calculation
@@ -1835,7 +1858,7 @@ async function fetchData() {
     const cls = dxy < 98 ? 'badge-danger' : dxy < 102 ? 'badge-watch' : 'badge-normal';
     const lbl = dxy < 98 ? 'Weak' : dxy < 102 ? 'Watch' : 'Normal';
     setInd('v-dxy','s-dxy', v, lbl, cls);
-    document.getElementById('t1-dxy').textContent = 'DXY ' + v;
+    document.getElementById('t1-dxy').textContent = 'Proxy ' + v;
     document.getElementById('d-dxy').style.background = dxy < 98 ? 'var(--red)' : dxy < 102 ? 'var(--amber)' : 'var(--green)';
   }
   if (gold) {
@@ -1854,7 +1877,7 @@ async function fetchData() {
     setInd('v-spy','s-spy', v, spy > 5800 ? 'Watch' : 'Normal', spy > 5800 ? 'badge-watch' : 'badge-normal');
   }
 
-  // Display live HY spread
+  // Display live HY spread; do not use fake fallback values if unavailable.
   const hy = results.hy;
   if (hy) {
     const hyV = Math.round(hy) + ' bps';
@@ -1863,58 +1886,96 @@ async function fetchData() {
     document.getElementById('v-hy').textContent = hyV;
     const hyBadge = document.getElementById('s-hy');
     hyBadge.textContent = hyLbl;
-    hyBadge.style.background = hy > 500 ? 'var(--red-bg)' : hy > 400 ? 'var(--amber-bg)' : 'var(--green-bg)';
-    hyBadge.style.color = hy > 500 ? 'var(--red)' : hy > 400 ? 'var(--amber)' : 'var(--green)';
-    // Update Tier 2 HY reading with live value
+    hyBadge.className = 'ind-badge ' + hyCls;
+    hyBadge.style.position = 'static';
+    hyBadge.style.display = 'inline-block';
+    hyBadge.style.background = '';
+    hyBadge.style.color = '';
     const t2hy = document.getElementById('t2-hy');
     if (t2hy) t2hy.textContent = Math.round(hy) + ' bps — ' + (hy < 350 ? 'OK' : hy < 450 ? 'Watch' : 'Stress');
+    const hyDot = document.getElementById('d-hy');
+    if (hyDot) hyDot.style.background = hy > 500 ? 'var(--red)' : hy > 400 ? 'var(--amber)' : 'var(--green)';
+  } else {
+    document.getElementById('v-hy').textContent = '—';
+    const hyBadge = document.getElementById('s-hy');
+    hyBadge.textContent = 'Unavailable';
+    hyBadge.className = 'ind-badge badge-loading';
+    hyBadge.style.position = 'static';
+    hyBadge.style.display = 'inline-block';
+    hyBadge.style.background = '';
+    hyBadge.style.color = '';
+    const t2hy = document.getElementById('t2-hy');
+    if (t2hy) t2hy.textContent = 'Unavailable';
+    const hyDot = document.getElementById('d-hy');
+    if (hyDot) hyDot.style.background = 'var(--text3)';
   }
 
-  updateOverallRisk();
-  updateDCATracker();
   try {
     await updateMacroDataFreshness();
   } catch (error) {
     console.warn('Macro data freshness update failed', error);
   }
+  updateOverallRisk();
+  updateDCATracker();
   document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
 }
 
-function updateOverallRisk() {
+function calculateTacticalStressOverlayScore(data) {
   let score = 0;
-  const t = marketData;
+  const t = data || {};
 
-  // Treasury yields (max 25)
+  // Treasury-market stress and term-premium pressure.
   if (t.tsy30 > 5.5) score += 25; else if (t.tsy30 > 5.0) score += 18; else if (t.tsy30 > 4.8) score += 12;
   if (t.tsy10 && t.tsy10 > 4.8) score += 8; else if (t.tsy10 && t.tsy10 > 4.5) score += 4;
 
-  // Dollar weakness (max 20)
+  // Dollar confidence proxy. This is an EUR/USD-derived proxy, not official DXY.
   if (t.dxy && t.dxy < 98) score += 20; else if (t.dxy && t.dxy < 100) score += 14; else if (t.dxy && t.dxy < 102) score += 8;
 
-  // Gold elevation (max 15)
+  // Gold hedge-demand confirmation.
   if (t.gold && t.gold > 4500) score += 15; else if (t.gold && t.gold > 3500) score += 10; else if (t.gold && t.gold > 3000) score += 6;
 
-  // HY credit spreads (max 20)
-  if (t.hy > 500) score += 20; else if (t.hy > 400) score += 12; else if (t.hy > 320) score += 5;
+  // Credit-market stress. Missing HY data contributes zero and is shown as unavailable.
+  if (t.hy && t.hy > 500) score += 20; else if (t.hy && t.hy > 400) score += 12; else if (t.hy && t.hy > 320) score += 5;
 
-  // Structural signals — already triggered (max 20)
-  score += 8;  // Moody's downgrade triggered May 2025
-  score += 7;  // Active US-Iran military conflict Jul 2026
+  // Manual/static crisis items are intentionally not hard-coded into this score.
+  return Math.min(score, 100);
+}
 
-  score = Math.min(score, 100);
+function updateOverallRisk() {
+  const score = calculateTacticalStressOverlayScore(marketData);
 
   const bar = document.getElementById('risk-bar');
   bar.style.width = score + '%';
-  bar.style.background = score > 65 ? 'var(--red)' : score > 45 ? 'var(--amber)' : 'var(--green)';
+  bar.style.background = score > 65 ? 'var(--red)' : score > 45 ? 'var(--amber)' : score > 25 ? 'var(--amber)' : 'var(--green)';
   document.getElementById('risk-score').innerHTML = score + '<span>/100</span>';
 
-  const label = score > 65 ? 'High — consider defensive action' : score > 45 ? 'Elevated — monitor closely' : 'Moderate — maintain positioning';
-  const badge = score > 65 ? 'High' : score > 45 ? 'Elevated' : 'Moderate';
-  const badgeCls = score > 65 ? 'badge-danger' : score > 45 ? 'badge-watch' : 'badge-normal';
+  const label = score > 65
+    ? 'Tactical stress high — confirm with Reset/Bubble model before defensive action'
+    : score > 45
+      ? 'Tactical stress rising — monitor confirmation signals closely'
+      : score > 25
+        ? 'Tactical stress watch — market confirmation is building but not acute'
+        : 'Tactical stress contained — primary guidance comes from Reset/Bubble model';
+  const badge = score > 65 ? 'High' : score > 45 ? 'Rising' : score > 25 ? 'Watch' : 'Contained';
+  const badgeCls = score > 65 ? 'badge-danger' : score > 25 ? 'badge-watch' : 'badge-normal';
   document.getElementById('risk-status-label').textContent = label;
   const b = document.getElementById('risk-status-badge');
   b.textContent = badge;
   b.className = 'risk-status-badge ' + badgeCls;
+}
+
+function runTacticalOverlayCleanupSmokeTest() {
+  const emptyScore = calculateTacticalStressOverlayScore({});
+  const stressScore = calculateTacticalStressOverlayScore({ tsy30: 5.6, tsy10: 4.9, dxy: 97.5, gold: 3600, hy: 510 });
+  const noStaticScore = calculateTacticalStressOverlayScore({ tsy30: null, tsy10: null, dxy: null, gold: null, hy: null });
+  return {
+    emptyScore,
+    stressScore,
+    noStaticScore,
+    noHardCodedManualPointsPass: emptyScore === 0 && noStaticScore === 0,
+    stressScenarioPass: stressScore === 83,
+    allPass: emptyScore === 0 && noStaticScore === 0 && stressScore === 83
+  };
 }
 
 updateMacroRiskSummaryCards();
