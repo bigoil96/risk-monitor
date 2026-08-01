@@ -1916,6 +1916,62 @@ async function fetchStooqGldm90dHigh() {
   return high;
 }
 
+
+async function fetchYahooChart(symbol, range = '5d', interval = '1d') {
+  const rawUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol) + '?range=' + encodeURIComponent(range) + '&interval=' + encodeURIComponent(interval);
+  const data = await fetchJsonWithFallbacks(rawUrl);
+  const result = data && data.chart && Array.isArray(data.chart.result) ? data.chart.result[0] : null;
+  if (!result) throw new Error('No Yahoo chart result for ' + symbol);
+  if (data.chart && data.chart.error) throw new Error(data.chart.error.description || 'Yahoo chart error');
+  return result;
+}
+
+function extractYahooLatestPrice(chartResult) {
+  const meta = chartResult && chartResult.meta ? chartResult.meta : {};
+  const directCandidates = [meta.regularMarketPrice, meta.postMarketPrice, meta.preMarketPrice, meta.previousClose];
+  for (const candidate of directCandidates) {
+    const value = Number(candidate);
+    if (Number.isFinite(value) && value > 0) {
+      const time = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000) : null;
+      const date = time && !Number.isNaN(time.getTime()) ? time.toISOString().slice(0, 10) : null;
+      return { price: value, date, source: 'Yahoo Finance chart' };
+    }
+  }
+
+  const closes = chartResult && chartResult.indicators && chartResult.indicators.quote && chartResult.indicators.quote[0]
+    ? chartResult.indicators.quote[0].close || []
+    : [];
+  const timestamps = chartResult && chartResult.timestamp ? chartResult.timestamp : [];
+  for (let i = closes.length - 1; i >= 0; i--) {
+    const value = Number(closes[i]);
+    if (Number.isFinite(value) && value > 0) {
+      const time = timestamps[i] ? new Date(timestamps[i] * 1000) : null;
+      const date = time && !Number.isNaN(time.getTime()) ? time.toISOString().slice(0, 10) : null;
+      return { price: value, date, source: 'Yahoo Finance chart close' };
+    }
+  }
+  return null;
+}
+
+async function fetchYahooLatestGldm() {
+  const chart = await fetchYahooChart('GLDM', '5d', '1d');
+  const result = extractYahooLatestPrice(chart);
+  if (!result) throw new Error('No valid GLDM price from Yahoo chart');
+  return result;
+}
+
+async function fetchYahooGldm90dHigh() {
+  const chart = await fetchYahooChart('GLDM', '6mo', '1d');
+  const closes = chart && chart.indicators && chart.indicators.quote && chart.indicators.quote[0]
+    ? chart.indicators.quote[0].close || []
+    : [];
+  const clean = closes.map(Number).filter(value => Number.isFinite(value) && value > 0);
+  const recentCloses = clean.slice(-90);
+  const high = calculateFiveDayAverageHighFromCloses(recentCloses);
+  if (!high) throw new Error('No valid GLDM 90-day high from Yahoo chart');
+  return high;
+}
+
 async function fetchGldm90dHigh() {
   // Use Alpha Vantage daily GLDM data for the actual ETF trigger calculation.
   // Do not mix spot gold data into the DCA rule; GLDM purchases and cooldowns are in GLDM dollars.
@@ -1942,12 +1998,17 @@ async function fetchGldm90dHigh() {
     }
     return maxAvg;
   } catch(e) {
-    console.warn('Alpha Vantage GLDM 90-day high unavailable; trying Stooq fallback', e);
+    console.warn('Alpha Vantage GLDM 90-day high unavailable; trying Yahoo fallback', e);
     try {
-      return await fetchStooqGldm90dHigh();
-    } catch(stooqError) {
-      console.warn('GLDM 90-day high unavailable from all sources', stooqError);
-      return null;
+      return await fetchYahooGldm90dHigh();
+    } catch(yahooError) {
+      console.warn('Yahoo GLDM 90-day high unavailable; trying Stooq fallback', yahooError);
+      try {
+        return await fetchStooqGldm90dHigh();
+      } catch(stooqError) {
+        console.warn('GLDM 90-day high unavailable from all sources', stooqError);
+        return null;
+      }
     }
   }
 }
@@ -2120,8 +2181,13 @@ async function fetchData() {
         throw new Error('No valid Alpha Vantage GLDM quote');
       }
     } catch(avError) {
-      console.warn('Alpha Vantage GLDM quote unavailable; trying Stooq fallback', avError);
-      gldmQuote = await fetchStooqLatestGldm();
+      console.warn('Alpha Vantage GLDM quote unavailable; trying Yahoo fallback', avError);
+      try {
+        gldmQuote = await fetchYahooLatestGldm();
+      } catch(yahooError) {
+        console.warn('Yahoo GLDM quote unavailable; trying Stooq fallback', yahooError);
+        gldmQuote = await fetchStooqLatestGldm();
+      }
     }
 
     if (gldmQuote && Number.isFinite(gldmQuote.price) && gldmQuote.price > 0) {
@@ -2392,6 +2458,7 @@ function runStep13SmokeTest() {
   const multiplierFunctionPass = typeof getGldmGoldProxyMultiplier === 'function';
   const robustFetchHelpersPass = typeof fetchTextWithFallbacks === 'function' && typeof fetchJsonWithFallbacks === 'function';
   const stooqFallbackHelpersPass = typeof fetchStooqLatestGldm === 'function' && typeof fetchStooqGldm90dHigh === 'function';
+  const yahooFallbackHelpersPass = typeof fetchYahooLatestGldm === 'function' && typeof fetchYahooGldm90dHigh === 'function' && typeof fetchYahooChart === 'function';
   const csvParserPass = extractLatestStooqClose('Symbol,Date,Time,Open,High,Low,Close,Volume\nGLDM.US,2026-08-01,22:00:00,85,86,84,85.50,1000').price === 85.5;
   return {
     step12Pass: step12.allPass,
@@ -2403,8 +2470,9 @@ function runStep13SmokeTest() {
     multiplierFunctionPass,
     robustFetchHelpersPass,
     stooqFallbackHelpersPass,
+    yahooFallbackHelpersPass,
     csvParserPass,
-    allPass: Boolean(step12.allPass && dcaUsesGldmLabelsPass && gldmFunctionRenamedPass && tacticalGoldStillScoresPass && fallbackProxyPass && dynamicProxyPass && multiplierFunctionPass && robustFetchHelpersPass && stooqFallbackHelpersPass && csvParserPass),
+    allPass: Boolean(step12.allPass && dcaUsesGldmLabelsPass && gldmFunctionRenamedPass && tacticalGoldStillScoresPass && fallbackProxyPass && dynamicProxyPass && multiplierFunctionPass && robustFetchHelpersPass && stooqFallbackHelpersPass && yahooFallbackHelpersPass && csvParserPass),
     step12
   };
 }
