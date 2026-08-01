@@ -637,8 +637,8 @@ const MACRO_RISK_CURRENT_INDICATORS = Object.freeze({
 });
 
 
-// Live macro risk overrides. Step 8 wires the simple/direct FRED indicators into the Excel-style scores.
-// Derived indicators still remain on the validated July snapshot until each calculation is tested separately.
+// Live macro risk overrides. Step 9 wires direct FRED indicators plus tested derived indicators into the Excel-style scores.
+// Valuation proxy remains on the validated July snapshot until its percentile/merge calculation is tested separately.
 let macroRiskLiveOverrides = {
   asOf: null,
   resetRisk: {},
@@ -691,8 +691,10 @@ const MACRO_LIVE_DIRECT_SERIES_MAP = Object.freeze({
   DRTSCILM: { modelKey: 'bubbleRisk', indicatorId: 'loan_standards', display: 'percent1' }
 });
 
+const MACRO_LIVE_DERIVED_SERIES_IDS = Object.freeze(['CPIAUCSL', 'FEDFUNDS', 'TOTALSL']);
+
 function isMacroSeriesWiredToScore(seriesId) {
-  return Object.prototype.hasOwnProperty.call(MACRO_LIVE_DIRECT_SERIES_MAP, seriesId);
+  return Object.prototype.hasOwnProperty.call(MACRO_LIVE_DIRECT_SERIES_MAP, seriesId) || MACRO_LIVE_DERIVED_SERIES_IDS.includes(seriesId);
 }
 
 function formatMacroLiveDisplay(value, displayType) {
@@ -739,28 +741,167 @@ function getLatestDateText(dates) {
   return validDates.length ? validDates[0].dateText : null;
 }
 
-function applyLiveMacroRiskOverridesFromFreshnessRows(rows) {
-  const overrides = Array.isArray(rows)
-    ? rows.map(buildLiveMacroIndicatorOverride).filter(Boolean)
-    : [];
-  if (!overrides.length) return false;
+function refreshMacroRiskUiAfterOverride() {
+  if (typeof document === 'undefined') return;
+  updateMacroRiskSummaryCards();
+  updateMacroRiskIndicatorBreakdowns();
+  updateRiskHistoryTable();
+}
+
+function applyMacroRiskOverrideItems(overrides) {
+  const validOverrides = Array.isArray(overrides) ? overrides.filter(Boolean) : [];
+  if (!validOverrides.length) return false;
 
   const nextOverrides = {
     ...macroRiskLiveOverrides,
-    asOf: getLatestDateText(overrides.map(item => item.date)) || macroRiskLiveOverrides.asOf,
+    asOf: getLatestDateText(validOverrides.map(item => item.date)) || macroRiskLiveOverrides.asOf,
     resetRisk: { ...macroRiskLiveOverrides.resetRisk },
     bubbleRisk: { ...macroRiskLiveOverrides.bubbleRisk }
   };
 
-  overrides.forEach(item => {
+  validOverrides.forEach(item => {
     nextOverrides[item.modelKey][item.indicatorId] = item.override;
   });
 
   macroRiskLiveOverrides = nextOverrides;
-  updateMacroRiskSummaryCards();
-  updateMacroRiskIndicatorBreakdowns();
-  updateRiskHistoryTable();
+  refreshMacroRiskUiAfterOverride();
   return true;
+}
+
+function applyLiveMacroRiskOverridesFromFreshnessRows(rows) {
+  const overrides = Array.isArray(rows)
+    ? rows.map(buildLiveMacroIndicatorOverride).filter(Boolean)
+    : [];
+  return applyMacroRiskOverrideItems(overrides);
+}
+
+
+function shiftIsoDateMonths(dateText, months) {
+  const [year, month, day] = String(dateText).split('-').map(Number);
+  if (!year || !month || !day) return null;
+  const shifted = new Date(Date.UTC(year, month - 1 + months, day));
+  const yyyy = shifted.getUTCFullYear();
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(shifted.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function normalizeFredObservations(observations) {
+  if (!Array.isArray(observations)) return [];
+  return observations
+    .filter(obs => obs && obs.value !== '.' && obs.value !== '' && Number.isFinite(Number(obs.value)))
+    .map(obs => ({ date: obs.date, value: Number(obs.value) }))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+function findObservationByDate(observations, dateText) {
+  return normalizeFredObservations(observations).find(obs => obs.date === dateText) || null;
+}
+
+function calculateYoYPercentFromObservations(observations) {
+  const valid = normalizeFredObservations(observations);
+  const latest = valid[0] || null;
+  if (!latest) return null;
+  const priorDate = shiftIsoDateMonths(latest.date, -12);
+  const prior = findObservationByDate(valid, priorDate);
+  if (!prior || prior.value === 0) return null;
+  return {
+    date: latest.date,
+    priorDate,
+    value: ((latest.value / prior.value) - 1) * 100,
+    latestValue: latest.value,
+    priorValue: prior.value
+  };
+}
+
+function buildDerivedMacroRiskOverridesFromSeries(seriesData) {
+  const overrides = [];
+  const cpiYoY = calculateYoYPercentFromObservations(seriesData.CPIAUCSL || []);
+  const totalCreditYoY = calculateYoYPercentFromObservations(seriesData.TOTALSL || []);
+  const fedFundsLatest = normalizeFredObservations(seriesData.FEDFUNDS || [])[0] || null;
+
+  if (cpiYoY) {
+    const inflationIndicator = findMacroIndicator(MACRO_RISK_CONFIG.resetRisk, 'inflation_yoy');
+    const inflationScore = calculateIndicatorScoreFromThresholds(inflationIndicator, cpiYoY.value);
+    if (inflationScore !== null) {
+      overrides.push({
+        modelKey: 'resetRisk',
+        indicatorId: 'inflation_yoy',
+        date: cpiYoY.date,
+        override: {
+          value: cpiYoY.value,
+          display: cpiYoY.value.toFixed(2) + '%',
+          score: inflationScore,
+          note: 'Live YoY calculation from FRED CPIAUCSL: ' + formatMacroRiskDate(cpiYoY.date) + ' versus ' + formatMacroRiskDate(cpiYoY.priorDate) + '.'
+        }
+      });
+    }
+  }
+
+  if (cpiYoY && fedFundsLatest) {
+    const realPolicyIndicator = findMacroIndicator(MACRO_RISK_CONFIG.resetRisk, 'real_policy_rate');
+    const realPolicyRate = fedFundsLatest.value - cpiYoY.value;
+    const realPolicyScore = calculateIndicatorScoreFromThresholds(realPolicyIndicator, realPolicyRate);
+    if (realPolicyScore !== null) {
+      overrides.push({
+        modelKey: 'resetRisk',
+        indicatorId: 'real_policy_rate',
+        date: getLatestDateText([fedFundsLatest.date, cpiYoY.date]) || cpiYoY.date,
+        override: {
+          value: realPolicyRate,
+          display: (realPolicyRate >= 0 ? '+' : '') + realPolicyRate.toFixed(2) + '%',
+          score: realPolicyScore,
+          note: 'Live derived value: FEDFUNDS ' + fedFundsLatest.value.toFixed(2) + '% minus CPI YoY ' + cpiYoY.value.toFixed(2) + '%.'
+        }
+      });
+    }
+  }
+
+  if (totalCreditYoY) {
+    const creditIndicator = findMacroIndicator(MACRO_RISK_CONFIG.bubbleRisk, 'total_credit_growth_yoy');
+    const creditScore = calculateIndicatorScoreFromThresholds(creditIndicator, totalCreditYoY.value);
+    if (creditScore !== null) {
+      overrides.push({
+        modelKey: 'bubbleRisk',
+        indicatorId: 'total_credit_growth_yoy',
+        date: totalCreditYoY.date,
+        override: {
+          value: totalCreditYoY.value,
+          display: totalCreditYoY.value.toFixed(2) + '%',
+          score: creditScore,
+          note: 'Live YoY calculation from FRED TOTALSL: ' + formatMacroRiskDate(totalCreditYoY.date) + ' versus ' + formatMacroRiskDate(totalCreditYoY.priorDate) + '.'
+        }
+      });
+    }
+  }
+
+  return overrides;
+}
+
+async function fetchFredObservations(seriesId, limit = 400) {
+  const response = await fetch(buildFredApiUrl(seriesId, limit));
+  if (!response.ok) throw new Error(`FRED observations failed for ${seriesId}: ${response.status}`);
+  const data = await response.json();
+  return normalizeFredObservations(data.observations);
+}
+
+async function applyLiveDerivedMacroRiskOverrides() {
+  try {
+    const [cpi, fedFunds, totalCredit] = await Promise.all([
+      fetchFredObservations('CPIAUCSL', 420),
+      fetchFredObservations('FEDFUNDS', 36),
+      fetchFredObservations('TOTALSL', 420)
+    ]);
+    const overrides = buildDerivedMacroRiskOverridesFromSeries({
+      CPIAUCSL: cpi,
+      FEDFUNDS: fedFunds,
+      TOTALSL: totalCredit
+    });
+    return applyMacroRiskOverrideItems(overrides);
+  } catch (error) {
+    console.warn('Live derived macro risk update failed', error);
+    return false;
+  }
 }
 
 function runLiveDirectMacroRiskSmokeTest() {
@@ -813,6 +954,66 @@ function runLiveDirectMacroRiskSmokeTest() {
       snapshot.bubbleScore === 1.1 &&
       snapshot.bubbleRegime === 'Moderate'
     )
+  };
+}
+
+function runLiveDerivedMacroRiskSmokeTest() {
+  const originalOverrides = macroRiskLiveOverrides;
+  const seriesData = {
+    CPIAUCSL: [
+      { date: '2026-07-01', value: '104.2' },
+      { date: '2026-06-01', value: '103.6' },
+      { date: '2025-07-01', value: '100.0' }
+    ],
+    FEDFUNDS: [
+      { date: '2026-07-01', value: '3.70' }
+    ],
+    TOTALSL: [
+      { date: '2026-07-01', value: '102.27' },
+      { date: '2025-07-01', value: '100.00' }
+    ]
+  };
+
+  const overrides = buildDerivedMacroRiskOverridesFromSeries(seriesData);
+  applyMacroRiskOverrideItems(overrides);
+  const snapshot = buildCurrentMacroRiskSnapshot();
+  const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
+  macroRiskLiveOverrides = originalOverrides;
+
+  const cpiYoY = currentIndicators.resetRisk.inflation_yoy;
+  const realPolicy = currentIndicators.resetRisk.real_policy_rate;
+  const creditYoY = currentIndicators.bubbleRisk.total_credit_growth_yoy;
+
+  return {
+    derivedOverrideCount: overrides.length,
+    cpiYoYPass: Boolean(Math.abs(cpiYoY.value - 4.2) < 0.000001 && cpiYoY.score === 2),
+    realPolicyPass: Boolean(Math.abs(realPolicy.value - (-0.5)) < 0.000001 && realPolicy.score === 2),
+    totalCreditPass: Boolean(Math.abs(creditYoY.value - 2.27) < 0.000001 && creditYoY.score === 0),
+    resetPass: snapshot.resetScore === 1.7 && snapshot.resetRegime === 'Elevated',
+    bubblePass: snapshot.bubbleScore === 1.1 && snapshot.bubbleRegime === 'Moderate',
+    allPass: Boolean(
+      overrides.length === 3 &&
+      Math.abs(cpiYoY.value - 4.2) < 0.000001 &&
+      cpiYoY.score === 2 &&
+      Math.abs(realPolicy.value - (-0.5)) < 0.000001 &&
+      realPolicy.score === 2 &&
+      Math.abs(creditYoY.value - 2.27) < 0.000001 &&
+      creditYoY.score === 0 &&
+      snapshot.resetScore === 1.7 &&
+      snapshot.bubbleScore === 1.1
+    )
+  };
+}
+
+function runMacroLiveBatchSmokeTest() {
+  const direct = runLiveDirectMacroRiskSmokeTest();
+  const derived = runLiveDerivedMacroRiskSmokeTest();
+  return {
+    directPass: direct.allPass,
+    derivedPass: derived.allPass,
+    allPass: Boolean(direct.allPass && derived.allPass),
+    direct,
+    derived
   };
 }
 
@@ -1070,7 +1271,7 @@ function renderMacroBreakdownCards(model, snapshot, containerId, footerId) {
   }).join('');
 
   const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
-  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared indicator snapshot as of ' + formatMacroRiskDate(currentIndicators.asOf) + '. Live wiring status: direct FRED indicators are live; CPI YoY, real policy rate, valuation proxy, and total credit growth remain on the validated July snapshot until their derived calculations are tested.';
+  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared indicator snapshot as of ' + formatMacroRiskDate(currentIndicators.asOf) + '. Live wiring status: direct FRED indicators plus CPI YoY, real policy rate, and total credit growth are live; valuation proxy remains on the validated July snapshot until its percentile calculation is tested.';
   return result.score;
 }
 
@@ -1107,7 +1308,7 @@ function updateMacroRiskIndicatorBreakdowns() {
 
 // ==============================
 // Macro data freshness diagnostics
-// Step 6: fetch latest FRED observations without changing risk scores yet.
+// Fetch latest FRED observations and show diagnostic freshness/status.
 // ==============================
 const MACRO_DATA_FRESHNESS_SERIES = Object.freeze([
   { seriesId: 'GFDEGDQ188S', label: 'Federal Debt / GDP', cadence: 'quarterly', display: 'percent' },
@@ -1208,8 +1409,8 @@ function renderMacroDataFreshnessRows(rows) {
 
   const failures = rows.filter(row => row.error).length;
   footerEl.textContent = failures === 0
-    ? 'FRED diagnostics loaded successfully. Direct FRED indicators are wired into Reset/Bubble Risk; CPI YoY, real policy rate, valuation proxy, and total credit growth remain diagnostics-only until their derived calculations are tested.'
-    : `FRED diagnostics loaded with ${failures} unavailable series. Available direct FRED indicators update the macro scores; unavailable or unwired derived series do not change the validated July snapshot.`;
+    ? 'FRED diagnostics loaded successfully. Direct FRED indicators plus CPI YoY, real policy rate, and total credit growth are wired into Reset/Bubble Risk; valuation proxy remains diagnostics-only until its percentile calculation is tested.'
+    : `FRED diagnostics loaded with ${failures} unavailable series. Available direct and tested derived indicators update the macro scores; unavailable series and the valuation proxy remain on the validated July snapshot.`;
 }
 
 async function updateMacroDataFreshness() {
@@ -1240,6 +1441,7 @@ async function updateMacroDataFreshness() {
 
   renderMacroDataFreshnessRows(rows);
   applyLiveMacroRiskOverridesFromFreshnessRows(rows);
+  await applyLiveDerivedMacroRiskOverrides();
   return rows;
 }
 
@@ -1258,7 +1460,8 @@ function runMacroDataFreshnessSmokeTest() {
     monthlyStatusPass: monthlyStatus.label === 'Current',
     quarterlyStatusPass: quarterlyStatus.label === 'Current',
     formatBpsPass: formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps',
-    allPass: Boolean(latest && latest.date === '2026-06-30' && monthlyStatus.label === 'Current' && quarterlyStatus.label === 'Current' && formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps')
+    derivedSeriesMarkedWiredPass: Boolean(isMacroSeriesWiredToScore('CPIAUCSL') && isMacroSeriesWiredToScore('FEDFUNDS') && isMacroSeriesWiredToScore('TOTALSL')),
+    allPass: Boolean(latest && latest.date === '2026-06-30' && monthlyStatus.label === 'Current' && quarterlyStatus.label === 'Current' && formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps' && isMacroSeriesWiredToScore('CPIAUCSL') && isMacroSeriesWiredToScore('FEDFUNDS') && isMacroSeriesWiredToScore('TOTALSL'))
   };
 }
 
