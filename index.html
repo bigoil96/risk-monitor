@@ -65,6 +65,18 @@
   .macro-risk-card-score span { font-size: 13px; color: var(--text3); }
   .macro-risk-card-sub { font-size: 13px; color: var(--text3); line-height: 1.5; }
   .macro-risk-note { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-top: -20px; margin-bottom: 32px; font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .posture-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin-bottom: 32px; }
+  .posture-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .posture-title { font-size: 20px; font-weight: 400; color: var(--text); letter-spacing: -0.01em; }
+  .posture-badge { font-family: var(--mono); font-size: 11px; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .posture-sub { font-size: 13px; color: var(--text3); line-height: 1.6; margin-bottom: 16px; }
+  .posture-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .posture-card { background: var(--bg2); padding: 14px 16px; min-height: 104px; }
+  .posture-card-label { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+  .posture-card-stance { font-size: 15px; color: var(--text); margin-bottom: 4px; }
+  .posture-card-detail { font-size: 12px; color: var(--text3); line-height: 1.45; }
+  .score-timing-block { background: var(--blue-bg); border: 1px solid rgba(26,111,168,0.18); border-radius: 12px; padding: 14px 18px; margin-bottom: 32px; font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .score-timing-block strong { color: var(--text); font-weight: 500; }
   .risk-history-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
   .risk-history-header, .risk-history-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 12px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--border); }
   .risk-history-header { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; background: var(--bg3); }
@@ -199,6 +211,7 @@
     .hero h1 { font-size: 22px; }
     .indicators-grid { grid-template-columns: 1fr 1fr; }
     .macro-risk-grid { grid-template-columns: 1fr; }
+    .posture-header { flex-direction: column; align-items: flex-start; }
     .risk-history-header, .risk-history-row { grid-template-columns: 1fr; gap: 4px; }
     .macro-freshness-header, .macro-freshness-row { grid-template-columns: 1fr; gap: 4px; }
     .risk-history-header { display: none; }
@@ -258,6 +271,18 @@
   </div>
   <div class="macro-risk-note" id="macro-risk-note">Loading Excel model snapshot...</div>
 
+  <div class="section-label">Portfolio posture</div>
+  <div class="posture-block" id="portfolio-posture-block">
+    <div class="posture-header">
+      <div>
+        <div class="posture-title" id="portfolio-posture-title">Loading portfolio posture...</div>
+        <div class="posture-sub" id="portfolio-posture-summary">Combining Reset Risk, Bubble Risk, and the Tactical Stress Overlay.</div>
+      </div>
+      <span class="posture-badge badge-loading" id="portfolio-posture-badge">—</span>
+    </div>
+    <div class="posture-grid" id="portfolio-posture-grid"></div>
+  </div>
+
 
   <div class="section-label">Current indicator breakdown</div>
   <div class="macro-breakdown-section">
@@ -286,6 +311,11 @@
     </div>
     <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. Direct and derived macro indicators, including the SP500/CP valuation proxy, update the Excel-style scores as data is available.</div>
   </div>
+  <div class="section-label">Score timing</div>
+  <div class="score-timing-block" id="score-timing-block">
+    <strong>Current live score:</strong> updates on page load and Refresh Data using latest available FRED/market data. <strong>Monthly history:</strong> validated month-end snapshots; archive rows stay frozen until we intentionally add the next month.
+  </div>
+
   <div class="section-label">Risk history</div>
   <div class="risk-history-block" id="risk-history-block">
     <div class="risk-history-header">
@@ -379,10 +409,10 @@
       <div class="dca-row"><div class="dca-row-quarter">Purchase 3</div><div class="dca-row-date">Jun 17, 2026 — completed @ $85.86 (accelerated 2x)</div><div class="dca-row-amount">$88K</div><span class="dca-row-status dca-done">✓ Done</span></div>
       <div class="dca-row"><div class="dca-row-quarter">Purchase 4</div><div class="dca-row-date">Nov 1, 2026 — skipped (accel. credit used)</div><div class="dca-row-amount">$0</div><span class="dca-row-status dca-future">Skipped</span></div>
       <div class="dca-row"><div class="dca-row-quarter">Purchase 5</div><div class="dca-row-date">First Monday Feb 1, 2027</div><div class="dca-row-amount">$53K</div><span class="dca-row-status dca-next">▶ NEXT</span></div>
-      <div class="dca-row"><div class="dca-row-quarter">Purchase 6</div><div class="dca-row-date">First Monday May 1, 2027</div><div class="dca-row-amount">$53K</div><span class="dca-row-status dca-future">Scheduled</span></div>
-      <div class="dca-row"><div class="dca-row-quarter">Purchase 7</div><div class="dca-row-date">First Monday Aug 1, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Purchase 6</div><div class="dca-row-date">First Monday May 3, 2027</div><div class="dca-row-amount">$53K</div><span class="dca-row-status dca-future">Scheduled</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Purchase 7</div><div class="dca-row-date">First Monday Aug 2, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
       <div class="dca-row"><div class="dca-row-quarter">Purchase 8</div><div class="dca-row-date">First Monday Nov 1, 2027</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Scheduled</span></div>
-      <div class="dca-row"><div class="dca-row-quarter">Purchase 9</div><div class="dca-row-date">First Monday Feb 1, 2028</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Final</span></div>
+      <div class="dca-row"><div class="dca-row-quarter">Purchase 9</div><div class="dca-row-date">First Monday Feb 7, 2028</div><div class="dca-row-amount">$50K</div><span class="dca-row-status dca-future">Final</span></div>
       <div class="dca-row" style="border-top: 1px solid var(--border2);"><div class="dca-row-quarter" style="color:var(--text2)">Total</div><div class="dca-row-date" style="color:var(--text2)">Feb 2026 — Feb 2028</div><div class="dca-row-amount" style="color:var(--amber);">$400K</div><span class="dca-row-status" style="background:var(--amber-bg);color:var(--amber);border-radius:20px;padding:2px 8px;font-size:10px;">Target</span></div>
     </div>
 
@@ -749,6 +779,7 @@ function refreshMacroRiskUiAfterOverride() {
   updateMacroRiskSummaryCards();
   updateMacroRiskIndicatorBreakdowns();
   updateRiskHistoryTable();
+  updatePortfolioPosture();
 }
 
 function applyMacroRiskOverrideItems(overrides) {
@@ -1350,10 +1381,139 @@ function formatRiskDelta(current, previous) {
 
 function getCombinedMacroRiskRead(snapshot) {
   if (!snapshot) return '—';
+  if (snapshot.resetRegime === 'High' || snapshot.bubbleRegime === 'High') return 'High caution';
   if (snapshot.resetRegime === 'Elevated' && snapshot.bubbleRegime === 'Elevated') return 'Broad caution';
   if (snapshot.resetRegime === 'Elevated' && snapshot.bubbleRegime === 'Moderate') return 'Structural caution';
   if (snapshot.resetRegime === 'Moderate' && snapshot.bubbleRegime === 'Elevated') return 'Cycle caution';
   return 'Monitor';
+}
+
+function getTacticalStressOverlayStatus(score) {
+  const numericScore = Number(score);
+  if (!Number.isFinite(numericScore)) return { label: 'Unavailable', badgeClass: 'badge-loading', level: 'unknown' };
+  if (numericScore > 65) return { label: 'High', badgeClass: 'badge-danger', level: 'high' };
+  if (numericScore > 45) return { label: 'Rising', badgeClass: 'badge-watch', level: 'rising' };
+  if (numericScore > 25) return { label: 'Watch', badgeClass: 'badge-watch', level: 'watch' };
+  return { label: 'Contained', badgeClass: 'badge-normal', level: 'contained' };
+}
+
+function buildPortfolioPosture(snapshot, tacticalScore) {
+  const reset = snapshot ? snapshot.resetRegime : 'Unknown';
+  const bubble = snapshot ? snapshot.bubbleRegime : 'Unknown';
+  const tactical = getTacticalStressOverlayStatus(tacticalScore);
+  const resetHigh = reset === 'High';
+  const resetElevatedOrHigh = reset === 'Elevated' || resetHigh;
+  const bubbleElevatedOrHigh = bubble === 'Elevated' || bubble === 'High';
+  const tacticalRising = tactical.level === 'rising' || tactical.level === 'high';
+
+  let title = 'Maintain discipline';
+  let badge = 'Monitor';
+  let badgeClass = 'badge-loading';
+  let summary = 'Waiting for model data.';
+  let cards = [];
+
+  if (resetHigh || (resetElevatedOrHigh && bubbleElevatedOrHigh && tacticalRising)) {
+    title = 'Defensive resilience';
+    badge = 'Defensive';
+    badgeClass = 'badge-danger';
+    summary = 'Reset/Bubble risk and tactical confirmation point to a more fragile regime. Prioritize liquidity, reduce avoidable leverage, and be cautious with new illiquid commitments.';
+    cards = [
+      { label: 'Equities', stance: 'Quality over beta', detail: 'Stay exposed only where balance sheets, cash flow, and pricing power justify risk.' },
+      { label: 'Gold / GLDM', stance: 'Hedge active', detail: 'Continue hedge framework; only accelerate if the drawdown/cooldown rule is met.' },
+      { label: 'Cash', stance: 'Raise optionality', detail: 'Keep dry powder available for volatility and forced-seller opportunities.' },
+      { label: 'Private equity', stance: 'High bar', detail: 'Avoid generic levered deals; size only exceptional, downside-aware opportunities.' },
+      { label: 'Duration', stance: 'Avoid excess nominal duration', detail: 'Be careful with long-duration nominal exposure during inflation/debt stress.' }
+    ];
+  } else if (resetElevatedOrHigh && !bubbleElevatedOrHigh && !tacticalRising) {
+    title = 'Structural resilience, not tactical panic';
+    badge = 'Resilience';
+    badgeClass = 'badge-watch';
+    summary = 'Long-term reset pressure is elevated, but financial-cycle stress and tactical confirmation are not acute. Stay invested, keep building resilience, and avoid overreacting.';
+    cards = [
+      { label: 'Equities', stance: 'Stay invested', detail: 'Maintain core exposure; favor quality and avoid fragile/speculative concentration.' },
+      { label: 'Gold / GLDM', stance: 'Follow plan', detail: 'Gold thesis remains active. No extra acceleration unless the fresh trigger/cooldown rule fires.' },
+      { label: 'Cash', stance: 'Neutral to modest buffer', detail: 'Hold enough liquidity to avoid forced selling and fund planned opportunities.' },
+      { label: 'Private equity', stance: 'Selective only', detail: 'Elevated reset risk raises the bar for new illiquid commitments.' },
+      { label: 'Duration', stance: 'Stay cautious', detail: 'Avoid making long nominal duration a dominant risk until real-rate/inflation mix improves.' }
+    ];
+  } else if (!resetElevatedOrHigh && bubbleElevatedOrHigh) {
+    title = 'Cycle caution';
+    badge = 'Cycle risk';
+    badgeClass = 'badge-watch';
+    summary = 'Financial-cycle risk is elevated without a strong long-term reset signal. Focus on risk sizing, valuation discipline, and liquidity.';
+    cards = [
+      { label: 'Equities', stance: 'Trim fragility', detail: 'Avoid leverage and speculative exposure; quality still acceptable.' },
+      { label: 'Gold / GLDM', stance: 'Schedule only', detail: 'Do not accelerate just because bubble risk is elevated.' },
+      { label: 'Cash', stance: 'Maintain buffer', detail: 'Useful if volatility creates better entry points.' },
+      { label: 'Private equity', stance: 'Delay mediocre deals', detail: 'Bubble risk makes entry valuation and leverage discipline critical.' },
+      { label: 'Duration', stance: 'Case-by-case', detail: 'Duration can hedge growth shocks but is not a reset-risk hedge by itself.' }
+    ];
+  } else if (resetElevatedOrHigh && tacticalRising) {
+    title = 'Structural caution with market confirmation';
+    badge = 'Watch closely';
+    badgeClass = 'badge-watch';
+    summary = 'Reset risk is elevated and tactical stress is building. This is not automatically a sell signal, but it deserves closer monitoring and less complacency.';
+    cards = [
+      { label: 'Equities', stance: 'Stay invested, reduce fragility', detail: 'Avoid leverage and crowded speculative exposure.' },
+      { label: 'Gold / GLDM', stance: 'Hedge active', detail: 'Follow the schedule; use drawdown/cooldown trigger for acceleration only.' },
+      { label: 'Cash', stance: 'Keep optionality', detail: 'Liquidity matters more when tactical confirmation rises.' },
+      { label: 'Private equity', stance: 'Slow approvals', detail: 'Require stronger terms, lower leverage, and better downside protection.' },
+      { label: 'Duration', stance: 'Cautious', detail: 'Watch 30Y yield and dollar confidence before adding nominal duration risk.' }
+    ];
+  } else {
+    title = 'Balanced monitor';
+    badge = 'Balanced';
+    badgeClass = 'badge-normal';
+    summary = 'No model layer is flashing severe risk. Maintain the plan, but continue monthly monitoring and avoid complacency.';
+    cards = [
+      { label: 'Equities', stance: 'Normal allocation', detail: 'Stay diversified and valuation-aware.' },
+      { label: 'Gold / GLDM', stance: 'No acceleration', detail: 'Use scheduled plan only if reset thesis remains active.' },
+      { label: 'Cash', stance: 'Standard reserve', detail: 'No special defensive cash build required by the model.' },
+      { label: 'Private equity', stance: 'Normal diligence', detail: 'Sizing and liquidity still matter, but risk dashboard is not warning against all deals.' },
+      { label: 'Duration', stance: 'Normal caution', detail: 'Avoid overconcentration; use role-specific allocation rather than macro conviction.' }
+    ];
+  }
+
+  return { title, badge, badgeClass, summary, cards, tactical };
+}
+
+function updatePortfolioPosture() {
+  const titleEl = document.getElementById('portfolio-posture-title');
+  const summaryEl = document.getElementById('portfolio-posture-summary');
+  const badgeEl = document.getElementById('portfolio-posture-badge');
+  const gridEl = document.getElementById('portfolio-posture-grid');
+  if (!titleEl || !summaryEl || !badgeEl || !gridEl) return null;
+
+  const snapshot = getLatestMacroRiskSnapshot();
+  const tacticalScore = calculateTacticalStressOverlayScore(marketData || {});
+  const posture = buildPortfolioPosture(snapshot, tacticalScore);
+  const snapshotDate = snapshot ? formatMacroRiskDate(snapshot.date) : '—';
+
+  titleEl.textContent = posture.title;
+  summaryEl.textContent = posture.summary + ' Inputs: Reset ' + snapshot.resetRegime + ' (' + snapshot.resetScore.toFixed(1) + '), Bubble ' + snapshot.bubbleRegime + ' (' + snapshot.bubbleScore.toFixed(1) + '), Tactical Stress ' + posture.tactical.label + ' (' + tacticalScore + '/100). Current live score as of ' + snapshotDate + '.';
+  badgeEl.textContent = posture.badge;
+  badgeEl.className = 'posture-badge ' + posture.badgeClass;
+  gridEl.innerHTML = posture.cards.map(card => `
+    <div class="posture-card">
+      <div class="posture-card-label">${card.label}</div>
+      <div class="posture-card-stance">${card.stance}</div>
+      <div class="posture-card-detail">${card.detail}</div>
+    </div>
+  `).join('');
+
+  return posture;
+}
+
+function runPortfolioPostureSmokeTest() {
+  const structural = buildPortfolioPosture({ date: '2026-07-31', resetScore: 1.7, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' }, 0);
+  const defensive = buildPortfolioPosture({ date: '2026-07-31', resetScore: 2.3, resetRegime: 'High', bubbleScore: 1.6, bubbleRegime: 'Elevated' }, 70);
+  return {
+    structuralTitle: structural.title,
+    structuralPass: structural.title === 'Structural resilience, not tactical panic' && structural.badge === 'Resilience' && structural.cards.length === 5,
+    defensiveTitle: defensive.title,
+    defensivePass: defensive.title === 'Defensive resilience' && defensive.badge === 'Defensive' && defensive.cards.length === 5,
+    allPass: Boolean(structural.title === 'Structural resilience, not tactical panic' && structural.badge === 'Resilience' && structural.cards.length === 5 && defensive.title === 'Defensive resilience' && defensive.badge === 'Defensive' && defensive.cards.length === 5)
+  };
 }
 
 function updateRiskHistoryTable() {
@@ -1379,7 +1539,7 @@ function updateRiskHistoryTable() {
   }).join('');
 
   const latest = history[history.length - 1];
-  footerEl.textContent = 'Latest monthly read: ' + formatMacroRiskDate(latest.date) + ' — ' + latest.resetRegime + ' reset risk and ' + latest.bubbleRegime + ' bubble risk.';
+  footerEl.textContent = 'Latest live/current read: ' + formatMacroRiskDate(latest.date) + ' — ' + latest.resetRegime + ' reset risk and ' + latest.bubbleRegime + ' bubble risk. The latest row updates when live data refreshes; older monthly rows are frozen validated snapshots and do not auto-commit a new month.';
 }
 
 function getScoreBadgeClass(score) {
@@ -1962,6 +2122,7 @@ function updateOverallRisk() {
   const b = document.getElementById('risk-status-badge');
   b.textContent = badge;
   b.className = 'risk-status-badge ' + badgeCls;
+  updatePortfolioPosture();
 }
 
 function runTacticalOverlayCleanupSmokeTest() {
@@ -1978,9 +2139,34 @@ function runTacticalOverlayCleanupSmokeTest() {
   };
 }
 
+function runStep12SmokeTest() {
+  const macro = runMacroRiskEngineSmokeTest();
+  const live = runMacroLiveBatchSmokeTest();
+  const tactical = runTacticalOverlayCleanupSmokeTest();
+  const posture = runPortfolioPostureSmokeTest();
+  const dcaDateLabelsPass = (typeof document !== 'undefined') ? Boolean(
+    document.body.innerHTML.includes('First Monday May 3, 2027') &&
+    document.body.innerHTML.includes('First Monday Aug 2, 2027') &&
+    document.body.innerHTML.includes('First Monday Feb 7, 2028')
+  ) : true;
+  return {
+    macroPass: macro.allPass,
+    livePass: live.allPass,
+    tacticalPass: tactical.allPass,
+    posturePass: posture.allPass,
+    dcaDateLabelsPass,
+    allPass: Boolean(macro.allPass && live.allPass && tactical.allPass && posture.allPass && dcaDateLabelsPass),
+    macro,
+    live,
+    tactical,
+    posture
+  };
+}
+
 updateMacroRiskSummaryCards();
 updateMacroRiskIndicatorBreakdowns();
 updateRiskHistoryTable();
+updatePortfolioPosture();
 fetchData();
 </script>
 </body>
