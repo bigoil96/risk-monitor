@@ -77,6 +77,16 @@
   .risk-history-regime { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
   .risk-history-footer { padding: 12px 18px; font-size: 12px; color: var(--text3); border-top: 1px solid var(--border); }
 
+  .macro-breakdown-section { margin-bottom: 32px; }
+  .macro-breakdown-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
+  .macro-breakdown-card { background: var(--bg2); padding: 16px 18px; min-height: 148px; position: relative; }
+  .macro-breakdown-name { font-size: 13px; color: var(--text); padding-right: 42px; line-height: 1.35; margin-bottom: 8px; }
+  .macro-breakdown-value { font-family: var(--mono); font-size: 20px; color: var(--text); margin-bottom: 8px; }
+  .macro-breakdown-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; color: var(--text3); }
+  .macro-breakdown-meta strong { display: block; font-family: var(--mono); font-size: 12px; color: var(--text2); font-weight: 400; }
+  .macro-breakdown-badge { position: absolute; top: 14px; right: 14px; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .macro-breakdown-footer { font-size: 12px; color: var(--text3); line-height: 1.6; margin-bottom: 24px; }
+
   .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 
   .indicators-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
@@ -230,6 +240,15 @@
     </div>
   </div>
   <div class="macro-risk-note" id="macro-risk-note">Loading Excel model snapshot...</div>
+
+
+  <div class="section-label">Current indicator breakdown</div>
+  <div class="macro-breakdown-section">
+    <div class="macro-breakdown-grid" id="reset-risk-breakdown-cards"></div>
+    <div class="macro-breakdown-footer" id="reset-risk-breakdown-footer">Loading Reset Risk contributors...</div>
+    <div class="macro-breakdown-grid" id="bubble-risk-breakdown-cards"></div>
+    <div class="macro-breakdown-footer" id="bubble-risk-breakdown-footer">Loading Bubble Risk contributors...</div>
+  </div>
 
   <div class="section-label">Risk history</div>
   <div class="risk-history-block" id="risk-history-block">
@@ -565,6 +584,27 @@ const MACRO_RISK_CONFIG = Object.freeze({
   ]
 });
 
+// Latest validated Excel indicator snapshot. Static for now; later steps will replace each value with live data pulls after validation.
+const MACRO_RISK_CURRENT_INDICATORS = Object.freeze({
+  asOf: '2026-07-31',
+  resetRisk: {
+    debt_gdp: { value: 122.8, display: '122.8%', score: 3, note: 'Primary structural pressure' },
+    inflation_yoy: { value: 4.2, display: '4.2%', score: 2, note: 'Above comfort band' },
+    real_policy_rate: { value: -0.5, display: '-0.5%', score: 2, note: 'Mild financial repression' },
+    ten_year_yield: { value: 4.5, display: '4.5%', score: 1, note: 'Elevated, not crisis' },
+    yield_curve: { value: 0.6, display: '+0.6 pp', score: 0, note: 'No inversion stress' },
+    household_debt_gdp: { value: 68.5, display: '68.5%', score: 2, note: 'Structural leverage contributor' },
+    household_dsr: { value: 11.3, display: '11.3%', score: 1, note: 'Mild debt-service pressure' }
+  },
+  bubbleRisk: {
+    valuation_proxy: { value: 1.89, display: '1.89x', score: 3, note: 'Expensive valuation proxy' },
+    nfci: { value: -0.51, display: '-0.51', score: 0, note: 'Financial conditions still loose' },
+    hy_spread_bps: { value: 263, display: '263 bps', score: 1, note: 'Mild spread risk' },
+    loan_standards: { value: 8.1, display: '8.1%', score: 1, note: 'Modest tightening' },
+    total_credit_growth_yoy: { value: 2.27, display: '2.27%', score: 0, note: 'No credit boom' }
+  }
+});
+
 function getMacroRiskRegime(score) {
   const match = MACRO_RISK_CONFIG.regimes.find(regime => score >= regime.min && score < regime.maxExclusive);
   return match ? match.label : 'Unknown';
@@ -696,6 +736,87 @@ function updateRiskHistoryTable() {
 
   const latest = history[history.length - 1];
   footerEl.textContent = 'Latest monthly read: ' + formatMacroRiskDate(latest.date) + ' — ' + latest.resetRegime + ' reset risk and ' + latest.bubbleRegime + ' bubble risk.';
+}
+
+
+function getScoreBadgeClass(score) {
+  const numericScore = Number(score);
+  if (numericScore >= 3) return 'badge-danger';
+  if (numericScore >= 2) return 'badge-watch';
+  return 'badge-normal';
+}
+
+function getScoreLabel(score) {
+  const numericScore = Number(score);
+  if (numericScore >= 3) return 'High';
+  if (numericScore >= 2) return 'Elevated';
+  if (numericScore >= 1) return 'Mild';
+  return 'Low';
+}
+
+function renderMacroBreakdownCards(model, snapshot, containerId, footerId) {
+  const container = document.getElementById(containerId);
+  const footer = document.getElementById(footerId);
+  if (!container || !footer) return null;
+
+  let total = 0;
+
+  container.innerHTML = model.indicators.map(indicator => {
+    const item = snapshot[indicator.id];
+    if (!item) return '';
+
+    const contribution = Math.round((Number(item.score) * indicator.weight) * 100) / 100;
+    total += contribution;
+
+    return `
+      <div class="macro-breakdown-card">
+        <span class="macro-breakdown-badge ${getScoreBadgeClass(item.score)}">${getScoreLabel(item.score)}</span>
+        <div class="macro-breakdown-name">${indicator.label}</div>
+        <div class="macro-breakdown-value">${item.display}</div>
+        <div class="macro-breakdown-meta">
+          <div>Score<strong>${item.score}/3</strong></div>
+          <div>Weight<strong>${Math.round(indicator.weight * 100)}%</strong></div>
+          <div>Contribution<strong>${contribution.toFixed(2)}</strong></div>
+          <div>Source<strong>${indicator.fredSeriesId || 'Derived'}</strong></div>
+        </div>
+        <div class="ind-sub" style="margin-top:10px;">${item.note}</div>
+      </div>
+    `;
+  }).join('');
+
+  const roundedTotal = Math.round(total * 100) / 100;
+  const regime = getMacroRiskRegime(roundedTotal);
+  footer.textContent = model.label + ': weighted indicator total = ' + roundedTotal.toFixed(2) + ' / 3 (' + regime + '). Static snapshot as of ' + formatMacroRiskDate(MACRO_RISK_CURRENT_INDICATORS.asOf) + '; live FRED wiring comes after this section is visually verified.';
+  return roundedTotal;
+}
+
+function updateMacroRiskIndicatorBreakdowns() {
+  const resetTotal = renderMacroBreakdownCards(
+    MACRO_RISK_CONFIG.resetRisk,
+    MACRO_RISK_CURRENT_INDICATORS.resetRisk,
+    'reset-risk-breakdown-cards',
+    'reset-risk-breakdown-footer'
+  );
+
+  const bubbleTotal = renderMacroBreakdownCards(
+    MACRO_RISK_CONFIG.bubbleRisk,
+    MACRO_RISK_CURRENT_INDICATORS.bubbleRisk,
+    'bubble-risk-breakdown-cards',
+    'bubble-risk-breakdown-footer'
+  );
+
+  return {
+    reset: {
+      score: resetTotal,
+      expectedScore: 1.7,
+      pass: resetTotal === 1.7
+    },
+    bubble: {
+      score: bubbleTotal,
+      expectedScore: 1.1,
+      pass: bubbleTotal === 1.1
+    }
+  };
 }
 
 function updateClock() {
@@ -993,6 +1114,7 @@ function updateOverallRisk() {
 }
 
 updateMacroRiskSummaryCards();
+updateMacroRiskIndicatorBreakdowns();
 updateRiskHistoryTable();
 fetchData();
 </script>
