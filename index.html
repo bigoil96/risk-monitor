@@ -182,7 +182,8 @@
   .alert-double { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); }
   .alert-skip { background: var(--bg3); border: 1px solid var(--border2); color: var(--text3); }
   .alert-pause { background: var(--blue-bg); border: 1px solid var(--blue); color: var(--blue); }
-  .dca-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--border); }
+  .dca-stats { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--border); }
+  .source-confidence-note { font-size: 12px; color: var(--text3); line-height: 1.6; margin-top: -18px; margin-bottom: 32px; }
   .dca-stat { background: var(--bg2); padding: 14px 18px; }
   .dca-stat-label { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
   .dca-stat-val { font-family: var(--mono); font-size: 18px; color: var(--text); }
@@ -214,6 +215,7 @@
     .posture-header { flex-direction: column; align-items: flex-start; }
     .risk-history-header, .risk-history-row { grid-template-columns: 1fr; gap: 4px; }
     .macro-freshness-header, .macro-freshness-row { grid-template-columns: 1fr; gap: 4px; }
+    .dca-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
     .risk-history-header { display: none; }
   }
 </style>
@@ -231,7 +233,7 @@
 <div class="main">
   <div class="hero">
     <h1>Debt cycle <span>risk assessment</span></h1>
-    <p>Dalio-inspired framework — structural reset risk, bubble risk, and tactical stress overlay</p>
+    <p>Dalio-inspired framework — structural reset risk, financial-cycle risk, tactical stress, and portfolio posture</p>
   </div>
 
   <div class="overall-risk">
@@ -243,7 +245,7 @@
       <div class="risk-bar-fill" id="risk-bar" style="width:0%"></div>
     </div>
     <div class="risk-status-row">
-      <span class="risk-status-label" id="risk-status-label">Secondary confirmation layer — loading market data...</span>
+      <span class="risk-status-label" id="risk-status-label">Secondary market-confirmation layer — loading live tactical data...</span>
       <span class="risk-status-badge badge-loading" id="risk-status-badge">—</span>
     </div>
   </div>
@@ -293,29 +295,6 @@
   </div>
 
 
-  <div class="section-label">Macro data freshness</div>
-  <div class="macro-freshness-block" id="macro-data-freshness-block">
-    <div class="macro-freshness-header">
-      <div>Indicator</div>
-      <div>Latest date</div>
-      <div>Latest value</div>
-      <div>Status</div>
-    </div>
-    <div id="macro-data-freshness-rows">
-      <div class="macro-freshness-row">
-        <div class="macro-freshness-name">Waiting for refresh<span class="macro-freshness-series">FRED diagnostics not loaded yet</span></div>
-        <div class="macro-freshness-date">—</div>
-        <div class="macro-freshness-value">—</div>
-        <div><span class="macro-freshness-status badge-loading">Pending</span></div>
-      </div>
-    </div>
-    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. Direct and derived macro indicators, including the SP500/CP valuation proxy, update the Excel-style scores as data is available.</div>
-  </div>
-  <div class="section-label">Score timing</div>
-  <div class="score-timing-block" id="score-timing-block">
-    <strong>Current live score:</strong> updates on page load and Refresh Data using latest available FRED/market data. <strong>Monthly history:</strong> validated month-end snapshots; archive rows stay frozen until we intentionally add the next month.
-  </div>
-
   <div class="section-label">Risk history</div>
   <div class="risk-history-block" id="risk-history-block">
     <div class="risk-history-header">
@@ -333,10 +312,11 @@
     <div class="ind-card"><div class="ind-name">30-yr Treasury yield</div><div class="ind-val" id="v-tsy">—</div><div class="ind-sub">Danger zone &gt; 5.5%</div><span class="ind-badge badge-loading" id="s-tsy">—</span></div>
     <div class="ind-card"><div class="ind-name">10-yr Treasury yield</div><div class="ind-val" id="v-10y">—</div><div class="ind-sub">Curve steepening watch</div><span class="ind-badge badge-loading" id="s-10y">—</span></div>
     <div class="ind-card"><div class="ind-name">Dollar confidence proxy</div><div class="ind-val" id="v-dxy">—</div><div class="ind-sub">EUR/USD-derived proxy, not official DXY</div><span class="ind-badge badge-loading" id="s-dxy">—</span></div>
-    <div class="ind-card"><div class="ind-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub">FRED gold fixing; GLDM-implied fallback if unavailable</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
+    <div class="ind-card"><div class="ind-name" id="gold-card-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub" id="gold-card-sub">Prefers FRED PM gold fixing; lower-confidence GLDM proxy if needed</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
     <div class="ind-card"><div class="ind-name">S&amp;P 500 level</div><div class="ind-val" id="v-spy">—</div><div class="ind-sub">Context only — valuation proxy scored above</div><span class="ind-badge badge-loading" id="s-spy">—</span></div>
     <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">—</div><div class="ind-sub">Danger zone &gt; 500 bps</div><div style="margin-top:6px;"><span class="ind-badge badge-loading" id="s-hy" style="position:static;display:inline-block;">Unavailable</span></div></div>
   </div>
+  <div class="source-confidence-note">Tactical stress is a confirmation overlay. Live proxy inputs can inform the read, but Reset Risk and Bubble Risk remain the primary scoring engines.</div>
 
   <div class="section-label">Tactical stress signal tracker</div>
   <div class="tiers">
@@ -385,8 +365,8 @@
     <div class="dca-alert" id="dca-alert">
       <div class="dca-alert-icon" id="dca-icon">⏳</div>
       <div class="dca-alert-text">
-        <div class="dca-alert-title" id="dca-alert-title">Loading gold data...</div>
-        <div class="dca-alert-sub" id="dca-alert-sub">Checking GLDM trigger against current ETF price</div>
+        <div class="dca-alert-title" id="dca-alert-title">Loading GLDM data...</div>
+        <div class="dca-alert-sub" id="dca-alert-sub">Checking the GLDM trigger against the actual ETF price</div>
       </div>
       <span class="dca-alert-badge" id="dca-alert-badge">—</span>
     </div>
@@ -396,7 +376,7 @@
       <div class="dca-stat"><div class="dca-stat-label">Target position</div><div class="dca-stat-val">$400K</div><div class="dca-stat-sub">GLDM in 401k</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Deployed so far</div><div class="dca-stat-val" style="color:var(--green)">$144K</div><div class="dca-stat-sub">Through Jun 17, 2026</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Remaining</div><div class="dca-stat-val">$256K</div><div class="dca-stat-sub">5 purchases left</div></div>
-      <div class="dca-stat"><div class="dca-stat-label">Current GLDM</div><div class="dca-stat-val" id="dca-gold-price">—</div><div class="dca-stat-sub">Live ETF price</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Current GLDM</div><div class="dca-stat-val" id="dca-gold-price">—</div><div class="dca-stat-sub">Actual ETF price only</div></div>
       <div class="dca-stat"><div class="dca-stat-label">90d 5-day avg GLDM high</div><div class="dca-stat-val" id="dca-90d-ref">—</div><div class="dca-stat-sub">Trigger reference</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Drop from 90d GLDM high</div><div class="dca-stat-val" id="dca-drop-pct">—</div><div class="dca-stat-sub">10% / 20% triggers</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Reset Risk</div><div class="dca-stat-val" id="dca-risk-score">—</div><div class="dca-stat-sub">Gold thesis driver</div></div>
@@ -428,6 +408,32 @@
 
   </div>
 
+
+  <div class="section-label">Score timing</div>
+  <div class="score-timing-block" id="score-timing-block">
+    <strong>Current live score:</strong> updates on page load and Refresh Data using latest available FRED/market data. <strong>Monthly history:</strong> validated month-end snapshots; archive rows stay frozen until we intentionally add the next month.
+  </div>
+
+
+
+  <div class="section-label">Macro data freshness</div>
+  <div class="macro-freshness-block" id="macro-data-freshness-block">
+    <div class="macro-freshness-header">
+      <div>Indicator</div>
+      <div>Latest date</div>
+      <div>Latest value</div>
+      <div>Status</div>
+    </div>
+    <div id="macro-data-freshness-rows">
+      <div class="macro-freshness-row">
+        <div class="macro-freshness-name">Waiting for refresh<span class="macro-freshness-series">FRED diagnostics not loaded yet</span></div>
+        <div class="macro-freshness-date">—</div>
+        <div class="macro-freshness-value">—</div>
+        <div><span class="macro-freshness-status badge-loading">Pending</span></div>
+      </div>
+    </div>
+    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. Direct and derived macro indicators, including the SP500/CP valuation proxy, update the Excel-style scores as data is available.</div>
+  </div>
   <div class="controls">
     <button class="btn" onclick="fetchData()">Refresh data</button>
   </div>
@@ -2057,17 +2063,31 @@ function updateDCATracker() {
     dcaPriceSub.textContent = marketData.gldmSource + (marketData.gldmDate ? ' as of ' + marketData.gldmDate : '');
   }
 
-  // Use actual GLDM 90-day high if available. Fallback is visibly marked and should not be treated as a trade signal.
-  const refHigh = peak || (gldm * 1.08);
+  if (!peak) {
+    document.getElementById('dca-drop-pct').textContent = '—';
+    const refEl = document.getElementById('dca-90d-ref');
+    if (refEl) refEl.textContent = '—';
+    const refSub = document.querySelector('#dca-90d-ref + .dca-stat-sub');
+    if (refSub) refSub.textContent = 'Unavailable — no trigger signal';
+    alertIcon.textContent = '⚪';
+    alertTitle.textContent = 'GLDM price loaded, trigger reference unavailable';
+    alertSub.textContent = 'The DCA tracker needs actual GLDM history to calculate the 90-day 5-day average high. No buy signal is generated from fallback estimates.';
+    alertBadge.textContent = 'No signal';
+    alertBadge.className = 'dca-alert-badge alert-skip';
+    alertDiv.style.borderLeft = '3px solid var(--border2)';
+    return;
+  }
+
+  const refHigh = peak;
   const dropFromHigh = ((refHigh - gldm) / refHigh) * 100;
-  const dropDisplay = (dropFromHigh > 0 ? '-' : '+') + Math.abs(dropFromHigh).toFixed(1) + '%' + (peak ? '' : '*');
+  const dropDisplay = (dropFromHigh > 0 ? '-' : '+') + Math.abs(dropFromHigh).toFixed(1) + '%';
   const cooldownCleared = gldm <= nextCooldownGldmPrice;
 
   document.getElementById('dca-drop-pct').textContent = dropDisplay;
   const refEl = document.getElementById('dca-90d-ref');
-  if (refEl) refEl.textContent = '$' + refHigh.toFixed(2) + (peak ? '' : '*');
+  if (refEl) refEl.textContent = '$' + refHigh.toFixed(2);
   const refSub = document.querySelector('#dca-90d-ref + .dca-stat-sub');
-  if (refSub) refSub.textContent = peak ? 'Actual 90d 5-day avg high' : 'Fallback estimate — no trade signal';
+  if (refSub) refSub.textContent = 'Actual 90d 5-day avg high';
 
   if (!resetStatus.hedgeActive) {
     alertIcon.textContent = '🔵';
@@ -2147,7 +2167,7 @@ async function fetchData() {
   const AV_KEY = 'XO2H1EHRTK5N8UBK';
 
   // Fetch spot gold from FRED for the tactical stress overlay.
-  // Fallback to GLDM × 50 only if the FRED gold fixing is unavailable.
+  // If unavailable, use a clearly labeled GLDM-implied proxy for display and tactical confirmation only.
   try {
     const fredBase = `https://api.stlouisfed.org/fred/series/observations?series_id=GOLDPMGBD228NLBM&api_key=${FRED_API_KEY}&sort_order=desc&limit=10&file_type=json`;
     const d = await fetchJsonWithFallbacks(fredBase);
@@ -2294,25 +2314,35 @@ async function fetchData() {
     const v = '$' + Math.round(gold).toLocaleString();
     const cls = gold > 3500 ? 'badge-danger' : gold > 3000 ? 'badge-watch' : 'badge-normal';
     const lbl = gold > 3500 ? 'Elevated' : gold > 3000 ? 'Watch' : 'Normal';
-    setInd('v-gold','s-gold', v, lbl, cls);
-    document.getElementById('t1-gold').textContent = v;
-    document.getElementById('d-gold').style.background = gold > 3000 ? 'var(--amber)' : 'var(--green)';
-    // Show source/date in subtitle.
-    const goldSub = document.querySelector('#indicators-grid .ind-card:nth-child(4) .ind-sub');
-    if (goldSub && results.goldSource) {
-      if (results.goldSourceType === 'gldm_dynamic_proxy') {
-        goldSub.textContent = results.goldSource + ' — FRED gold unavailable; last calibrated multiplier';
-      } else if (results.goldSourceType === 'gldm_50x_proxy') {
-        goldSub.textContent = 'GLDM × 50 rough fallback — FRED gold unavailable';
-      } else {
-        const multiplierNote = results.goldProxyMultiplier ? ' ; GLDM/FRED ratio ' + results.goldProxyMultiplier.toFixed(1) + '× cached' : '';
-        goldSub.textContent = 'FRED PM gold fixing as of ' + results.goldDate + multiplierNote;
+    const goldName = document.getElementById('gold-card-name');
+    const goldSub = document.getElementById('gold-card-sub');
+
+    if (results.goldSourceType === 'fred') {
+      if (goldName) goldName.textContent = 'Gold (USD / oz)';
+      if (goldSub) {
+        const multiplierNote = results.goldProxyMultiplier
+          ? ' GLDM calibration cached at ' + results.goldProxyMultiplier.toFixed(1) + '×.'
+          : '';
+        goldSub.textContent = 'FRED PM gold fixing as of ' + results.goldDate + '.' + multiplierNote;
+      }
+    } else {
+      if (goldName) goldName.textContent = 'Gold proxy (USD / oz)';
+      if (goldSub) {
+        goldSub.textContent = results.goldSourceType === 'gldm_dynamic_proxy'
+          ? results.goldSource + ' — lower-confidence fallback; FRED gold unavailable.'
+          : 'GLDM × 50 rough fallback — lower-confidence proxy; FRED gold unavailable.';
       }
     }
+
+    setInd('v-gold','s-gold', v, lbl, cls);
+    document.getElementById('t1-gold').textContent = (results.goldSourceType === 'fred' ? v : v + ' proxy');
+    document.getElementById('d-gold').style.background = gold > 3000 ? 'var(--amber)' : 'var(--green)';
   } else {
+    const goldName = document.getElementById('gold-card-name');
+    const goldSub = document.getElementById('gold-card-sub');
+    if (goldName) goldName.textContent = 'Gold (USD / oz)';
+    if (goldSub) goldSub.textContent = 'FRED gold fixing unavailable; GLDM fallback also unavailable.';
     setInd('v-gold','s-gold', '—', 'Unavailable', 'badge-loading');
-    const goldSub = document.querySelector('#indicators-grid .ind-card:nth-child(4) .ind-sub');
-    if (goldSub) goldSub.textContent = 'FRED gold fixing unavailable';
     document.getElementById('t1-gold').textContent = 'Unavailable';
     document.getElementById('d-gold').style.background = 'var(--text3)';
   }
@@ -2394,12 +2424,12 @@ function updateOverallRisk() {
   document.getElementById('risk-score').innerHTML = score + '<span>/100</span>';
 
   const label = score > 65
-    ? 'Tactical stress high — confirm with Reset/Bubble model before defensive action'
+    ? 'Tactical stress high — verify Reset/Bubble before defensive action'
     : score > 45
       ? 'Tactical stress rising — monitor confirmation signals closely'
       : score > 25
-        ? 'Tactical stress watch — market confirmation is building but not acute'
-        : 'Tactical stress contained — primary guidance comes from Reset/Bubble model';
+        ? 'Tactical stress watch — confirmation building, not acute'
+        : 'Tactical stress contained — primary guidance remains Reset/Bubble model';
   const badge = score > 65 ? 'High' : score > 45 ? 'Rising' : score > 25 ? 'Watch' : 'Contained';
   const badgeCls = score > 65 ? 'badge-danger' : score > 25 ? 'badge-watch' : 'badge-normal';
   document.getElementById('risk-status-label').textContent = label;
@@ -2474,6 +2504,26 @@ function runStep13SmokeTest() {
     csvParserPass,
     allPass: Boolean(step12.allPass && dcaUsesGldmLabelsPass && gldmFunctionRenamedPass && tacticalGoldStillScoresPass && fallbackProxyPass && dynamicProxyPass && multiplierFunctionPass && robustFetchHelpersPass && stooqFallbackHelpersPass && yahooFallbackHelpersPass && csvParserPass),
     step12
+  };
+}
+
+function runStep14SmokeTest() {
+  const step13 = runStep13SmokeTest();
+  const html = typeof document !== 'undefined' ? document.body.innerHTML : '';
+  const goldCardIdsPass = html.includes('id="gold-card-name"') && html.includes('id="gold-card-sub"');
+  const tacticalNotePass = html.includes('Tactical stress is a confirmation overlay');
+  const dcaUsesActualEtfLanguagePass = html.includes('Actual ETF price only') && html.includes('GLDM ≥10% below 90d 5-day avg high');
+  const diagnosticsMovedLowerPass = html.indexOf('GLDM DCA tracker') < html.indexOf('Macro data freshness');
+  const dcaGridCssPass = html.includes('GLDM DCA tracker') && typeof calculateFiveDayAverageHighFromCloses === 'function';
+  return {
+    step13Pass: step13.allPass,
+    goldCardIdsPass,
+    tacticalNotePass,
+    dcaUsesActualEtfLanguagePass,
+    diagnosticsMovedLowerPass,
+    dcaGridCssPass,
+    allPass: Boolean(step13.allPass && goldCardIdsPass && tacticalNotePass && dcaUsesActualEtfLanguagePass && diagnosticsMovedLowerPass && dcaGridCssPass),
+    step13
   };
 }
 
