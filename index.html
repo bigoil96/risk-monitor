@@ -333,7 +333,7 @@
     <div class="ind-card"><div class="ind-name">30-yr Treasury yield</div><div class="ind-val" id="v-tsy">—</div><div class="ind-sub">Danger zone &gt; 5.5%</div><span class="ind-badge badge-loading" id="s-tsy">—</span></div>
     <div class="ind-card"><div class="ind-name">10-yr Treasury yield</div><div class="ind-val" id="v-10y">—</div><div class="ind-sub">Curve steepening watch</div><span class="ind-badge badge-loading" id="s-10y">—</span></div>
     <div class="ind-card"><div class="ind-name">Dollar confidence proxy</div><div class="ind-val" id="v-dxy">—</div><div class="ind-sub">EUR/USD-derived proxy, not official DXY</div><span class="ind-badge badge-loading" id="s-dxy">—</span></div>
-    <div class="ind-card"><div class="ind-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub">Systemic hedge signal &gt; $3,000</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
+    <div class="ind-card"><div class="ind-name">Gold (USD / oz)</div><div class="ind-val" id="v-gold">—</div><div class="ind-sub">FRED gold fixing; GLDM-implied fallback if unavailable</div><span class="ind-badge badge-loading" id="s-gold">—</span></div>
     <div class="ind-card"><div class="ind-name">S&amp;P 500 level</div><div class="ind-val" id="v-spy">—</div><div class="ind-sub">Context only — valuation proxy scored above</div><span class="ind-badge badge-loading" id="s-spy">—</span></div>
     <div class="ind-card"><div class="ind-name">HY credit spread (OAS)</div><div class="ind-val" id="v-hy">—</div><div class="ind-sub">Danger zone &gt; 500 bps</div><div style="margin-top:6px;"><span class="ind-badge badge-loading" id="s-hy" style="position:static;display:inline-block;">Unavailable</span></div></div>
   </div>
@@ -386,7 +386,7 @@
       <div class="dca-alert-icon" id="dca-icon">⏳</div>
       <div class="dca-alert-text">
         <div class="dca-alert-title" id="dca-alert-title">Loading gold data...</div>
-        <div class="dca-alert-sub" id="dca-alert-sub">Checking triggers against current gold price</div>
+        <div class="dca-alert-sub" id="dca-alert-sub">Checking GLDM trigger against current ETF price</div>
       </div>
       <span class="dca-alert-badge" id="dca-alert-badge">—</span>
     </div>
@@ -396,9 +396,9 @@
       <div class="dca-stat"><div class="dca-stat-label">Target position</div><div class="dca-stat-val">$400K</div><div class="dca-stat-sub">GLDM in 401k</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Deployed so far</div><div class="dca-stat-val" style="color:var(--green)">$144K</div><div class="dca-stat-sub">Through Jun 17, 2026</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Remaining</div><div class="dca-stat-val">$256K</div><div class="dca-stat-sub">5 purchases left</div></div>
-      <div class="dca-stat"><div class="dca-stat-label">Current gold</div><div class="dca-stat-val" id="dca-gold-price">—</div><div class="dca-stat-sub">Live price</div></div>
-      <div class="dca-stat"><div class="dca-stat-label">90d 5-day avg high</div><div class="dca-stat-val" id="dca-90d-ref">—</div><div class="dca-stat-sub">Trigger reference</div></div>
-      <div class="dca-stat"><div class="dca-stat-label">Drop from 90d high</div><div class="dca-stat-val" id="dca-drop-pct">—</div><div class="dca-stat-sub">10% / 20% triggers</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Current GLDM</div><div class="dca-stat-val" id="dca-gold-price">—</div><div class="dca-stat-sub">Live ETF price</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">90d 5-day avg GLDM high</div><div class="dca-stat-val" id="dca-90d-ref">—</div><div class="dca-stat-sub">Trigger reference</div></div>
+      <div class="dca-stat"><div class="dca-stat-label">Drop from 90d GLDM high</div><div class="dca-stat-val" id="dca-drop-pct">—</div><div class="dca-stat-sub">10% / 20% triggers</div></div>
       <div class="dca-stat"><div class="dca-stat-label">Reset Risk</div><div class="dca-stat-val" id="dca-risk-score">—</div><div class="dca-stat-sub">Gold thesis driver</div></div>
     </div>
 
@@ -421,7 +421,7 @@
       <div class="dca-rules-title">Decision rules — governed by Reset Risk and GLDM drawdown trigger</div>
       <div class="dca-rule"><span class="dca-rule-trigger">Reset Risk Elevated/High</span><span class="dca-rule-action">Gold hedge thesis active; follow scheduled DCA unless a fresh acceleration trigger fires</span></div>
       <div class="dca-rule"><span class="dca-rule-trigger">Reset Risk Low/Moderate for multiple months</span><span class="dca-rule-action">Reassess thesis before adding more; do not use the tactical overlay as the pause trigger</span></div>
-      <div class="dca-rule"><span class="dca-rule-trigger">GLDM/gold ≥10% below 90d 5-day avg high</span><span class="dca-rule-action">Acceleration signal; after June acceleration, require cooldown test before buying again</span></div>
+      <div class="dca-rule"><span class="dca-rule-trigger">GLDM ≥10% below 90d 5-day avg high</span><span class="dca-rule-action">Acceleration signal; after June acceleration, require cooldown test before buying again</span></div>
       <div class="dca-rule"><span class="dca-rule-trigger">Post-acceleration cooldown</span><span class="dca-rule-action">No further acceleration unless Reset Risk moves High or GLDM falls another ~10% from $85.86 (~$77.27)</span></div>
       <div class="dca-rule"><span class="dca-rule-trigger">Single-day spike only</span><span class="dca-rule-action">Ignore — use 5-day average to filter one-day geopolitical reactions</span></div>
     </div>
@@ -1794,21 +1794,61 @@ function setInd(valId, statusId, value, status, cls) {
   el.className = 'ind-badge ' + cls;
 }
 
-async function fetchGold90dHigh() {
-  // Use Alpha Vantage daily GLDM data for accurate 90-day rolling 5-day avg high
+const GOLD_PROXY_MULTIPLIER_FALLBACK = 50;
+const GOLD_PROXY_MULTIPLIER_STORAGE_KEY = 'riskMonitor.goldProxyMultiplier';
+
+function readStoredGoldProxyMultiplier() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(GOLD_PROXY_MULTIPLIER_STORAGE_KEY);
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 40 && value < 70 ? value : null;
+  } catch(e) {
+    return null;
+  }
+}
+
+function saveStoredGoldProxyMultiplier(multiplier) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (Number.isFinite(multiplier) && multiplier > 40 && multiplier < 70) {
+      localStorage.setItem(GOLD_PROXY_MULTIPLIER_STORAGE_KEY, String(multiplier));
+    }
+  } catch(e) {
+    // localStorage may be unavailable in private or restricted browser contexts.
+  }
+}
+
+function buildGldmImpliedGoldProxy(gldmPrice, multiplier = GOLD_PROXY_MULTIPLIER_FALLBACK) {
+  const price = Number(gldmPrice);
+  const mult = Number(multiplier);
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(mult) || mult <= 0) return null;
+  return price * mult;
+}
+
+function getGldmGoldProxyMultiplier() {
+  return readStoredGoldProxyMultiplier() || GOLD_PROXY_MULTIPLIER_FALLBACK;
+}
+
+async function fetchGldm90dHigh() {
+  // Use Alpha Vantage daily GLDM data for the actual ETF trigger calculation.
+  // Do not mix spot gold data into the DCA rule; GLDM purchases and cooldowns are in GLDM dollars.
   const AV_KEY = 'XO2H1EHRTK5N8UBK';
   try {
     const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=GLDM&outputsize=compact&apikey=${AV_KEY}`);
     const d = await r.json();
     const series = d['Time Series (Daily)'];
-    if (!series) throw new Error('No data');
-    // Get last 90 trading days of closing prices
+    if (!series) throw new Error('No GLDM daily data');
+
     const closes = Object.entries(series)
       .sort((a,b) => new Date(b[0]) - new Date(a[0]))
       .slice(0, 90)
-      .map(([,v]) => parseFloat(v['4. close']) * 50) // convert GLDM to gold oz equiv
+      .map(([,v]) => parseFloat(v['4. close']))
+      .filter(value => Number.isFinite(value) && value > 0)
       .reverse();
-    // Calculate highest 5-day rolling average
+
+    if (closes.length < 5) throw new Error('Insufficient GLDM history');
+
     let maxAvg = 0;
     for (let i = 4; i < closes.length; i++) {
       const avg = (closes[i] + closes[i-1] + closes[i-2] + closes[i-3] + closes[i-4]) / 5;
@@ -1816,18 +1856,8 @@ async function fetchGold90dHigh() {
     }
     return maxAvg;
   } catch(e) {
-    // Fallback: freegoldapi (may be stale)
-    try {
-      const r = await fetch('https://freegoldapi.com/data/latest.json');
-      const d = await r.json();
-      const recent = d.slice(-90);
-      let maxAvg = 0;
-      for (let i = 4; i < recent.length; i++) {
-        const avg = (recent[i].price + recent[i-1].price + recent[i-2].price + recent[i-3].price + recent[i-4].price) / 5;
-        if (avg > maxAvg) maxAvg = avg;
-      }
-      return maxAvg;
-    } catch(e2) { return null; }
+    console.warn('GLDM 90-day high unavailable', e);
+    return null;
   }
 }
 
@@ -1842,34 +1872,44 @@ function getResetRiskGoldThesisStatus() {
 }
 
 function updateDCATracker() {
-  const gold = marketData.gold;
-  const peak = marketData.gold90dHigh;
+  const gldm = marketData.gldm;
+  const peak = marketData.gldm90dHigh;
   const resetStatus = getResetRiskGoldThesisStatus();
   const lastAcceleratedGldmPrice = 85.86;
   const nextCooldownGldmPrice = lastAcceleratedGldmPrice * 0.90;
 
-  if (!gold) return;
-
-  document.getElementById('dca-gold-price').textContent = '$' + Math.round(gold).toLocaleString();
   document.getElementById('dca-risk-score').textContent = resetStatus.score.toFixed(1) + ' ' + resetStatus.regime;
-
-  // Use real 90d high if available, otherwise fall back to approximation.
-  const refHigh = peak || (gold * 1.08);
-  const dropFromHigh = ((refHigh - gold) / refHigh) * 100;
-  const dropDisplay = (dropFromHigh > 0 ? '-' : '+') + Math.abs(dropFromHigh).toFixed(1) + '%' + (peak ? '' : '*');
-  const currentGldmApprox = gold / 50;
-  const cooldownCleared = currentGldmApprox <= nextCooldownGldmPrice;
-
-  document.getElementById('dca-drop-pct').textContent = dropDisplay;
-
-  const refEl = document.getElementById('dca-90d-ref');
-  if (refEl) refEl.textContent = '$' + Math.round(refHigh).toLocaleString() + (peak ? '' : '*');
 
   const alertTitle = document.getElementById('dca-alert-title');
   const alertSub = document.getElementById('dca-alert-sub');
   const alertBadge = document.getElementById('dca-alert-badge');
   const alertIcon = document.getElementById('dca-icon');
   const alertDiv = document.getElementById('dca-alert');
+
+  if (!gldm) {
+    document.getElementById('dca-gold-price').textContent = '—';
+    document.getElementById('dca-90d-ref').textContent = '—';
+    document.getElementById('dca-drop-pct').textContent = '—';
+    alertIcon.textContent = '⚪';
+    alertTitle.textContent = 'GLDM data unavailable';
+    alertSub.textContent = 'DCA trigger requires actual GLDM price data. Refresh later; do not infer a buy signal from the gold proxy.';
+    alertBadge.textContent = 'No signal';
+    alertBadge.className = 'dca-alert-badge alert-skip';
+    alertDiv.style.borderLeft = '3px solid var(--border2)';
+    return;
+  }
+
+  document.getElementById('dca-gold-price').textContent = '$' + gldm.toFixed(2);
+
+  // Use actual GLDM 90-day high if available. Fallback is visibly marked and should not be treated as a trade signal.
+  const refHigh = peak || (gldm * 1.08);
+  const dropFromHigh = ((refHigh - gldm) / refHigh) * 100;
+  const dropDisplay = (dropFromHigh > 0 ? '-' : '+') + Math.abs(dropFromHigh).toFixed(1) + '%' + (peak ? '' : '*');
+  const cooldownCleared = gldm <= nextCooldownGldmPrice;
+
+  document.getElementById('dca-drop-pct').textContent = dropDisplay;
+  const refEl = document.getElementById('dca-90d-ref');
+  if (refEl) refEl.textContent = '$' + refHigh.toFixed(2) + (peak ? '' : '*');
 
   if (!resetStatus.hedgeActive) {
     alertIcon.textContent = '🔵';
@@ -1908,7 +1948,6 @@ function updateDCATracker() {
     alertDiv.style.borderLeft = '3px solid var(--green)';
   }
 }
-
 
 const FRED_API_KEY = 'e009c048723673a26fda0f7aaef4f060';
 
@@ -1949,16 +1988,65 @@ async function fetchData() {
 
   const AV_KEY = 'XO2H1EHRTK5N8UBK';
 
-  // Fetch GLDM price from Alpha Vantage (free, CORS-enabled, real-time)
+  // Fetch spot gold from FRED for the tactical stress overlay.
+  // Fallback to GLDM × 50 only if the FRED gold fixing is unavailable.
+  try {
+    const fredBase = `https://api.stlouisfed.org/fred/series/observations?series_id=GOLDPMGBD228NLBM&api_key=${FRED_API_KEY}&sort_order=desc&limit=10&file_type=json`;
+    const url = proxy + encodeURIComponent(fredBase);
+    const r = await fetch(url);
+    const d = await r.json();
+    const obs = d.observations.find(o => o.value !== '.');
+    results.goldSpot = parseFloat(obs.value);
+    results.gold = results.goldSpot;
+    results.goldDate = obs.date;
+    results.goldSource = 'FRED GOLDPMGBD228NLBM';
+    results.goldSourceType = 'fred';
+  } catch(e) {
+    results.goldSpot = null;
+    results.gold = null;
+    results.goldDate = null;
+    results.goldSource = null;
+    results.goldSourceType = null;
+  }
+
+  // Fetch actual GLDM ETF price from Alpha Vantage for the DCA tracker.
   try {
     const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLDM&apikey=${AV_KEY}`);
     const d = await r.json();
-    const price = parseFloat(d['Global Quote']['05. price']);
+    const price = parseFloat(d['Global Quote'] && d['Global Quote']['05. price']);
     if (price && price > 0) {
-      results.gold = price * 50; // GLDM × 50 = approx gold oz price
-      results.goldDate = 'live (GLDM)';
+      results.gldm = price;
+      results.gldmDate = 'live (Alpha Vantage)';
+
+      // When both FRED spot gold and GLDM are available, calibrate a dynamic multiplier.
+      // GLDM is roughly 1/50 oz of gold, but expenses and tracking make the exact ratio drift.
+      if (results.goldSpot && price > 0) {
+        const impliedMultiplier = results.goldSpot / price;
+        if (Number.isFinite(impliedMultiplier) && impliedMultiplier > 40 && impliedMultiplier < 70) {
+          results.goldProxyMultiplier = impliedMultiplier;
+          saveStoredGoldProxyMultiplier(impliedMultiplier);
+        }
+      }
+
+      if (!results.gold) {
+        const storedMultiplier = readStoredGoldProxyMultiplier();
+        const fallbackMultiplier = storedMultiplier || GOLD_PROXY_MULTIPLIER_FALLBACK;
+        results.gold = buildGldmImpliedGoldProxy(price, fallbackMultiplier);
+        results.goldDate = results.gldmDate;
+        results.goldSourceType = storedMultiplier ? 'gldm_dynamic_proxy' : 'gldm_50x_proxy';
+        results.goldSource = storedMultiplier
+          ? 'GLDM-implied proxy ×' + storedMultiplier.toFixed(1)
+          : 'GLDM × 50 rough fallback proxy';
+        results.goldProxyMultiplier = fallbackMultiplier;
+      }
+    } else {
+      results.gldm = null;
+      results.gldmDate = null;
     }
-  } catch(e) { results.gold = null; }
+  } catch(e) {
+    results.gldm = null;
+    results.gldmDate = null;
+  }
 
   // Fetch EUR/USD from Alpha Vantage for accurate DXY approximation
   try {
@@ -1989,8 +2077,8 @@ async function fetchData() {
   }
 
   // Fetch real 90-day 5-day rolling avg high for GLDM trigger calculation
-  const gold90dHigh = await fetchGold90dHigh();
-  results.gold90dHigh = gold90dHigh;
+  const gldm90dHigh = await fetchGldm90dHigh();
+  results.gldm90dHigh = gldm90dHigh;
 
   marketData = results;
 
@@ -2028,9 +2116,24 @@ async function fetchData() {
     setInd('v-gold','s-gold', v, lbl, cls);
     document.getElementById('t1-gold').textContent = v;
     document.getElementById('d-gold').style.background = gold > 3000 ? 'var(--amber)' : 'var(--green)';
-    // Show data date in subtitle
+    // Show source/date in subtitle.
     const goldSub = document.querySelector('#indicators-grid .ind-card:nth-child(4) .ind-sub');
-    if (goldSub && results.goldDate) goldSub.textContent = results.goldDate === 'live (GLDM)' ? 'Live via GLDM × 50' : 'As of ' + results.goldDate;
+    if (goldSub && results.goldSource) {
+      if (results.goldSourceType === 'gldm_dynamic_proxy') {
+        goldSub.textContent = results.goldSource + ' — FRED gold unavailable; last calibrated multiplier';
+      } else if (results.goldSourceType === 'gldm_50x_proxy') {
+        goldSub.textContent = 'GLDM × 50 rough fallback — FRED gold unavailable';
+      } else {
+        const multiplierNote = results.goldProxyMultiplier ? ' ; GLDM/FRED ratio ' + results.goldProxyMultiplier.toFixed(1) + '× cached' : '';
+        goldSub.textContent = 'FRED PM gold fixing as of ' + results.goldDate + multiplierNote;
+      }
+    }
+  } else {
+    setInd('v-gold','s-gold', '—', 'Unavailable', 'badge-loading');
+    const goldSub = document.querySelector('#indicators-grid .ind-card:nth-child(4) .ind-sub');
+    if (goldSub) goldSub.textContent = 'FRED gold fixing unavailable';
+    document.getElementById('t1-gold').textContent = 'Unavailable';
+    document.getElementById('d-gold').style.background = 'var(--text3)';
   }
   if (spy) {
     const v = Math.round(spy).toLocaleString();
@@ -2160,6 +2263,28 @@ function runStep12SmokeTest() {
     live,
     tactical,
     posture
+  };
+}
+
+function runStep13SmokeTest() {
+  const step12 = runStep12SmokeTest();
+  const html = typeof document !== 'undefined' ? document.body.innerHTML : '';
+  const dcaUsesGldmLabelsPass = html.includes('Current GLDM') && html.includes('90d 5-day avg GLDM high') && html.includes('Drop from 90d GLDM high');
+  const gldmFunctionRenamedPass = typeof fetchGldm90dHigh === 'function';
+  const tacticalGoldStillScoresPass = calculateTacticalStressOverlayScore({ gold: 3600 }) === 10;
+  const fallbackProxyPass = buildGldmImpliedGoldProxy(80, 50) === 4000;
+  const dynamicProxyPass = Math.round(buildGldmImpliedGoldProxy(80, 51.6)) === 4128;
+  const multiplierFunctionPass = typeof getGldmGoldProxyMultiplier === 'function';
+  return {
+    step12Pass: step12.allPass,
+    dcaUsesGldmLabelsPass,
+    gldmFunctionRenamedPass,
+    tacticalGoldStillScoresPass,
+    fallbackProxyPass,
+    dynamicProxyPass,
+    multiplierFunctionPass,
+    allPass: Boolean(step12.allPass && dcaUsesGldmLabelsPass && gldmFunctionRenamedPass && tacticalGoldStillScoresPass && fallbackProxyPass && dynamicProxyPass && multiplierFunctionPass),
+    step12
   };
 }
 
