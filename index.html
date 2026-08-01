@@ -299,6 +299,262 @@
 <script>
 let marketData = {};
 
+
+// ==============================
+// Excel Macro Risk Model Config
+// Source of truth: workbook logic discussed and validated outside this app.
+// Step 1 is intentionally no-op: existing UI remains unchanged until we wire this in.
+// ==============================
+const MACRO_RISK_CONFIG = Object.freeze({
+  version: '2026-08-01',
+  regimes: [
+    { id: 'low', label: 'Low', min: 0, maxExclusive: 0.75 },
+    { id: 'moderate', label: 'Moderate', min: 0.75, maxExclusive: 1.5 },
+    { id: 'elevated', label: 'Elevated', min: 1.5, maxExclusive: 2.25 },
+    { id: 'high', label: 'High', min: 2.25, maxExclusive: Infinity }
+  ],
+  resetRisk: {
+    id: 'resetRisk',
+    label: 'Long-Term Debt Cycle / Reset Risk',
+    description: 'Structural debt-cycle and regime-change pressure.',
+    indicators: [
+      {
+        id: 'debt_gdp',
+        label: 'Federal Debt / GDP',
+        fredSeriesId: 'GFDEGDQ188S',
+        unit: '% of GDP',
+        weight: 0.25,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 120, score: 3 },
+          { min: 100, score: 2 },
+          { min: 80, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'inflation_yoy',
+        label: 'CPI Inflation YoY',
+        fredSeriesId: 'CPIAUCSL',
+        unit: '% YoY',
+        weight: 0.15,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 7, score: 3 },
+          { min: 4, score: 2 },
+          { min: 2.5, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'real_policy_rate',
+        label: 'Real Policy Rate',
+        unit: 'Fed Funds - CPI YoY',
+        weight: 0.10,
+        scoringType: 'lower_is_riskier',
+        thresholds: [
+          { max: -2, score: 3 },
+          { max: 0, score: 2 },
+          { max: 1, score: 1 },
+          { max: Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'ten_year_yield',
+        label: '10Y Treasury Yield',
+        fredSeriesId: 'DGS10',
+        unit: '%',
+        weight: 0.15,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 6, score: 3 },
+          { min: 5, score: 2 },
+          { min: 4, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'yield_curve',
+        label: '10Y - 3M Yield Curve',
+        fredSeriesId: 'T10Y3M',
+        unit: 'percentage points',
+        weight: 0.15,
+        scoringType: 'lower_is_riskier',
+        thresholds: [
+          { max: -1, score: 3 },
+          { max: 0, score: 2 },
+          { max: 0.5, score: 1 },
+          { max: Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'household_debt_gdp',
+        label: 'Household Debt / GDP',
+        fredSeriesId: 'HDTGPDUSQ163N',
+        unit: '% of GDP',
+        weight: 0.10,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 75, score: 3 },
+          { min: 65, score: 2 },
+          { min: 55, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'household_dsr',
+        label: 'Household Debt Service Ratio',
+        fredSeriesId: 'TDSP',
+        unit: '% disposable income',
+        weight: 0.10,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 13, score: 3 },
+          { min: 12, score: 2 },
+          { min: 11, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      }
+    ]
+  },
+  bubbleRisk: {
+    id: 'bubbleRisk',
+    label: 'Short-Term Bubble / Crash Risk',
+    description: 'Financial-cycle drawdown pressure and credit-market stress.',
+    indicators: [
+      {
+        id: 'valuation_proxy',
+        label: 'S&P 500 / Corporate Profits Valuation Proxy',
+        fredSeriesId: 'SP500 + CP',
+        unit: 'ratio',
+        weight: 0.25,
+        scoringType: 'historical_percentile',
+        thresholds: [
+          { percentileMin: 90, score: 3 },
+          { percentileMin: 75, score: 2 },
+          { percentileMin: 50, score: 1 },
+          { percentileMin: 0, score: 0 }
+        ]
+      },
+      {
+        id: 'nfci',
+        label: 'National Financial Conditions Index',
+        fredSeriesId: 'NFCI',
+        unit: 'index',
+        weight: 0.20,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 0.5, score: 3 },
+          { min: 0, score: 2 },
+          { min: -0.5, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'hy_spread_bps',
+        label: 'High-Yield Credit Spread',
+        fredSeriesId: 'BAMLH0A0HYM2',
+        unit: 'bps',
+        weight: 0.20,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 600, score: 3 },
+          { min: 400, score: 2 },
+          { min: 250, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'loan_standards',
+        label: 'C&I Loan Standards Tightening',
+        fredSeriesId: 'DRTSCILM',
+        unit: 'net % tightening',
+        weight: 0.15,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 30, score: 3 },
+          { min: 10, score: 2 },
+          { min: 0, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      },
+      {
+        id: 'total_credit_growth_yoy',
+        label: 'Total Credit Growth YoY',
+        fredSeriesId: 'TOTALSL',
+        unit: '% YoY',
+        weight: 0.20,
+        scoringType: 'higher_is_riskier',
+        thresholds: [
+          { min: 10, score: 3 },
+          { min: 7, score: 2 },
+          { min: 4, score: 1 },
+          { min: -Infinity, score: 0 }
+        ]
+      }
+    ]
+  },
+  riskHistory: [
+    { date: '2026-01-31', resetScore: 1.3, resetRegime: 'Moderate', bubbleScore: 1.1, bubbleRegime: 'Moderate' },
+    { date: '2026-02-28', resetScore: 1.3, resetRegime: 'Moderate', bubbleScore: 1.3, bubbleRegime: 'Moderate' },
+    { date: '2026-03-31', resetScore: 1.3, resetRegime: 'Moderate', bubbleScore: 1.5, bubbleRegime: 'Elevated' },
+    { date: '2026-04-30', resetScore: 1.6, resetRegime: 'Elevated', bubbleScore: 1.5, bubbleRegime: 'Elevated' },
+    { date: '2026-05-31', resetScore: 1.6, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' },
+    { date: '2026-06-30', resetScore: 1.7, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' },
+    { date: '2026-07-31', resetScore: 1.7, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' }
+  ]
+});
+
+function getMacroRiskRegime(score) {
+  const match = MACRO_RISK_CONFIG.regimes.find(regime => score >= regime.min && score < regime.maxExclusive);
+  return match ? match.label : 'Unknown';
+}
+
+function calculateWeightedRiskScore(model, indicatorScores) {
+  const total = model.indicators.reduce((sum, indicator) => {
+    const score = Number(indicatorScores[indicator.id]);
+    return Number.isFinite(score) ? sum + (score * indicator.weight) : sum;
+  }, 0);
+  return Math.round(total * 100) / 100;
+}
+
+function runMacroRiskModelSmokeTest() {
+  const resetScore = calculateWeightedRiskScore(MACRO_RISK_CONFIG.resetRisk, {
+    debt_gdp: 3,
+    inflation_yoy: 2,
+    real_policy_rate: 2,
+    ten_year_yield: 1,
+    yield_curve: 0,
+    household_debt_gdp: 2,
+    household_dsr: 1
+  });
+
+  const bubbleScore = calculateWeightedRiskScore(MACRO_RISK_CONFIG.bubbleRisk, {
+    valuation_proxy: 3,
+    nfci: 0,
+    hy_spread_bps: 1,
+    loan_standards: 1,
+    total_credit_growth_yoy: 0
+  });
+
+  return {
+    reset: {
+      score: resetScore,
+      regime: getMacroRiskRegime(resetScore),
+      expectedScore: 1.7,
+      expectedRegime: 'Elevated',
+      pass: resetScore === 1.7 && getMacroRiskRegime(resetScore) === 'Elevated'
+    },
+    bubble: {
+      score: bubbleScore,
+      regime: getMacroRiskRegime(bubbleScore),
+      expectedScore: 1.1,
+      expectedRegime: 'Moderate',
+      pass: bubbleScore === 1.1 && getMacroRiskRegime(bubbleScore) === 'Moderate'
+    }
+  };
+}
+
 function updateClock() {
   document.getElementById('topbar-time').textContent = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
 }
