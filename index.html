@@ -1830,6 +1830,92 @@ function getGldmGoldProxyMultiplier() {
   return readStoredGoldProxyMultiplier() || GOLD_PROXY_MULTIPLIER_FALLBACK;
 }
 
+function buildFetchFallbackUrls(rawUrl) {
+  return [
+    rawUrl,
+    'https://corsproxy.io/?' + encodeURIComponent(rawUrl),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(rawUrl)
+  ];
+}
+
+async function fetchTextWithFallbacks(rawUrl, options = {}) {
+  const urls = buildFetchFallbackUrls(rawUrl);
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { cache: options.cache || 'no-store' });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const text = await response.text();
+      if (!text || !text.trim()) throw new Error('Empty response');
+      return text;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('All fetch fallbacks failed');
+}
+
+async function fetchJsonWithFallbacks(rawUrl, options = {}) {
+  const text = await fetchTextWithFallbacks(rawUrl, options);
+  return JSON.parse(text);
+}
+
+function parseSimpleCsv(csvText) {
+  const lines = String(csvText || '').trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const values = line.split(',').map(v => v.trim());
+    return headers.reduce((row, header, index) => {
+      row[header] = values[index];
+      return row;
+    }, {});
+  });
+}
+
+function extractLatestStooqClose(csvText) {
+  const rows = parseSimpleCsv(csvText);
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const close = Number(rows[i].Close);
+    if (Number.isFinite(close) && close > 0) {
+      return { price: close, date: rows[i].Date || null, source: 'Stooq EOD' };
+    }
+  }
+  return null;
+}
+
+function calculateFiveDayAverageHighFromCloses(closes) {
+  const clean = closes.map(Number).filter(value => Number.isFinite(value) && value > 0);
+  if (clean.length < 5) return null;
+  let maxAvg = 0;
+  for (let i = 4; i < clean.length; i++) {
+    const avg = (clean[i] + clean[i - 1] + clean[i - 2] + clean[i - 3] + clean[i - 4]) / 5;
+    if (avg > maxAvg) maxAvg = avg;
+  }
+  return maxAvg || null;
+}
+
+async function fetchStooqLatestGldm() {
+  const quoteUrl = 'https://stooq.com/q/l/?s=gldm.us&f=sd2t2ohlcv&h&e=csv';
+  const text = await fetchTextWithFallbacks(quoteUrl);
+  const result = extractLatestStooqClose(text);
+  if (!result) throw new Error('No valid GLDM close from Stooq quote CSV');
+  return result;
+}
+
+async function fetchStooqGldm90dHigh() {
+  const historyUrl = 'https://stooq.com/q/d/l/?s=gldm.us&i=d';
+  const text = await fetchTextWithFallbacks(historyUrl);
+  const rows = parseSimpleCsv(text)
+    .map(row => ({ date: row.Date, close: Number(row.Close) }))
+    .filter(row => row.date && Number.isFinite(row.close) && row.close > 0)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const recentCloses = rows.slice(-90).map(row => row.close);
+  const high = calculateFiveDayAverageHighFromCloses(recentCloses);
+  if (!high) throw new Error('No valid GLDM 90-day high from Stooq history CSV');
+  return high;
+}
+
 async function fetchGldm90dHigh() {
   // Use Alpha Vantage daily GLDM data for the actual ETF trigger calculation.
   // Do not mix spot gold data into the DCA rule; GLDM purchases and cooldowns are in GLDM dollars.
@@ -1856,8 +1942,13 @@ async function fetchGldm90dHigh() {
     }
     return maxAvg;
   } catch(e) {
-    console.warn('GLDM 90-day high unavailable', e);
-    return null;
+    console.warn('Alpha Vantage GLDM 90-day high unavailable; trying Stooq fallback', e);
+    try {
+      return await fetchStooqGldm90dHigh();
+    } catch(stooqError) {
+      console.warn('GLDM 90-day high unavailable from all sources', stooqError);
+      return null;
+    }
   }
 }
 
@@ -1900,6 +1991,10 @@ function updateDCATracker() {
   }
 
   document.getElementById('dca-gold-price').textContent = '$' + gldm.toFixed(2);
+  const dcaPriceSub = document.querySelector('#dca-gold-price + .dca-stat-sub');
+  if (dcaPriceSub && marketData.gldmSource) {
+    dcaPriceSub.textContent = marketData.gldmSource + (marketData.gldmDate ? ' as of ' + marketData.gldmDate : '');
+  }
 
   // Use actual GLDM 90-day high if available. Fallback is visibly marked and should not be treated as a trade signal.
   const refHigh = peak || (gldm * 1.08);
@@ -1910,6 +2005,8 @@ function updateDCATracker() {
   document.getElementById('dca-drop-pct').textContent = dropDisplay;
   const refEl = document.getElementById('dca-90d-ref');
   if (refEl) refEl.textContent = '$' + refHigh.toFixed(2) + (peak ? '' : '*');
+  const refSub = document.querySelector('#dca-90d-ref + .dca-stat-sub');
+  if (refSub) refSub.textContent = peak ? 'Actual 90d 5-day avg high' : 'Fallback estimate — no trade signal';
 
   if (!resetStatus.hedgeActive) {
     alertIcon.textContent = '🔵';
@@ -1992,16 +2089,17 @@ async function fetchData() {
   // Fallback to GLDM × 50 only if the FRED gold fixing is unavailable.
   try {
     const fredBase = `https://api.stlouisfed.org/fred/series/observations?series_id=GOLDPMGBD228NLBM&api_key=${FRED_API_KEY}&sort_order=desc&limit=10&file_type=json`;
-    const url = proxy + encodeURIComponent(fredBase);
-    const r = await fetch(url);
-    const d = await r.json();
+    const d = await fetchJsonWithFallbacks(fredBase);
     const obs = d.observations.find(o => o.value !== '.');
+    if (!obs) throw new Error('No valid FRED gold observation');
     results.goldSpot = parseFloat(obs.value);
+    if (!Number.isFinite(results.goldSpot) || results.goldSpot <= 0) throw new Error('Invalid FRED gold value');
     results.gold = results.goldSpot;
     results.goldDate = obs.date;
     results.goldSource = 'FRED GOLDPMGBD228NLBM';
     results.goldSourceType = 'fred';
   } catch(e) {
+    console.warn('FRED gold fixing unavailable; GLDM proxy fallback may be used', e);
     results.goldSpot = null;
     results.gold = null;
     results.goldDate = null;
@@ -2009,14 +2107,28 @@ async function fetchData() {
     results.goldSourceType = null;
   }
 
-  // Fetch actual GLDM ETF price from Alpha Vantage for the DCA tracker.
+  // Fetch actual GLDM ETF price from Alpha Vantage first, then Stooq EOD as fallback.
   try {
-    const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLDM&apikey=${AV_KEY}`);
-    const d = await r.json();
-    const price = parseFloat(d['Global Quote'] && d['Global Quote']['05. price']);
-    if (price && price > 0) {
+    let gldmQuote = null;
+    try {
+      const avUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLDM&apikey=${AV_KEY}`;
+      const d = await fetchJsonWithFallbacks(avUrl);
+      const price = parseFloat(d['Global Quote'] && d['Global Quote']['05. price']);
+      if (Number.isFinite(price) && price > 0) {
+        gldmQuote = { price, date: 'live (Alpha Vantage)', source: 'Alpha Vantage' };
+      } else {
+        throw new Error('No valid Alpha Vantage GLDM quote');
+      }
+    } catch(avError) {
+      console.warn('Alpha Vantage GLDM quote unavailable; trying Stooq fallback', avError);
+      gldmQuote = await fetchStooqLatestGldm();
+    }
+
+    if (gldmQuote && Number.isFinite(gldmQuote.price) && gldmQuote.price > 0) {
+      const price = gldmQuote.price;
       results.gldm = price;
-      results.gldmDate = 'live (Alpha Vantage)';
+      results.gldmDate = gldmQuote.date || null;
+      results.gldmSource = gldmQuote.source || 'ETF quote';
 
       // When both FRED spot gold and GLDM are available, calibrate a dynamic multiplier.
       // GLDM is roughly 1/50 oz of gold, but expenses and tracking make the exact ratio drift.
@@ -2035,17 +2147,20 @@ async function fetchData() {
         results.goldDate = results.gldmDate;
         results.goldSourceType = storedMultiplier ? 'gldm_dynamic_proxy' : 'gldm_50x_proxy';
         results.goldSource = storedMultiplier
-          ? 'GLDM-implied proxy ×' + storedMultiplier.toFixed(1)
-          : 'GLDM × 50 rough fallback proxy';
+          ? 'GLDM-implied proxy ×' + storedMultiplier.toFixed(1) + ' from ' + results.gldmSource
+          : 'GLDM × 50 rough fallback proxy from ' + results.gldmSource;
         results.goldProxyMultiplier = fallbackMultiplier;
       }
     } else {
       results.gldm = null;
       results.gldmDate = null;
+      results.gldmSource = null;
     }
   } catch(e) {
+    console.warn('GLDM quote unavailable from all sources', e);
     results.gldm = null;
     results.gldmDate = null;
+    results.gldmSource = null;
   }
 
   // Fetch EUR/USD from Alpha Vantage for accurate DXY approximation
@@ -2275,6 +2390,9 @@ function runStep13SmokeTest() {
   const fallbackProxyPass = buildGldmImpliedGoldProxy(80, 50) === 4000;
   const dynamicProxyPass = Math.round(buildGldmImpliedGoldProxy(80, 51.6)) === 4128;
   const multiplierFunctionPass = typeof getGldmGoldProxyMultiplier === 'function';
+  const robustFetchHelpersPass = typeof fetchTextWithFallbacks === 'function' && typeof fetchJsonWithFallbacks === 'function';
+  const stooqFallbackHelpersPass = typeof fetchStooqLatestGldm === 'function' && typeof fetchStooqGldm90dHigh === 'function';
+  const csvParserPass = extractLatestStooqClose('Symbol,Date,Time,Open,High,Low,Close,Volume\nGLDM.US,2026-08-01,22:00:00,85,86,84,85.50,1000').price === 85.5;
   return {
     step12Pass: step12.allPass,
     dcaUsesGldmLabelsPass,
@@ -2283,7 +2401,10 @@ function runStep13SmokeTest() {
     fallbackProxyPass,
     dynamicProxyPass,
     multiplierFunctionPass,
-    allPass: Boolean(step12.allPass && dcaUsesGldmLabelsPass && gldmFunctionRenamedPass && tacticalGoldStillScoresPass && fallbackProxyPass && dynamicProxyPass && multiplierFunctionPass),
+    robustFetchHelpersPass,
+    stooqFallbackHelpersPass,
+    csvParserPass,
+    allPass: Boolean(step12.allPass && dcaUsesGldmLabelsPass && gldmFunctionRenamedPass && tacticalGoldStillScoresPass && fallbackProxyPass && dynamicProxyPass && multiplierFunctionPass && robustFetchHelpersPass && stooqFallbackHelpersPass && csvParserPass),
     step12
   };
 }
