@@ -610,16 +610,74 @@ function getMacroRiskRegime(score) {
   return match ? match.label : 'Unknown';
 }
 
+function roundRiskScore(score) {
+  return Math.round(Number(score) * 100) / 100;
+}
+
+function getIndicatorScoresFromSnapshot(model, snapshot) {
+  return model.indicators.reduce((scores, indicator) => {
+    const item = snapshot[indicator.id];
+    if (item && Number.isFinite(Number(item.score))) {
+      scores[indicator.id] = Number(item.score);
+    }
+    return scores;
+  }, {});
+}
+
 function calculateWeightedRiskScore(model, indicatorScores) {
   const total = model.indicators.reduce((sum, indicator) => {
     const score = Number(indicatorScores[indicator.id]);
     return Number.isFinite(score) ? sum + (score * indicator.weight) : sum;
   }, 0);
-  return Math.round(total * 100) / 100;
+  return roundRiskScore(total);
+}
+
+function calculateMacroRiskModel(model, snapshot) {
+  const details = model.indicators.map(indicator => {
+    const item = snapshot[indicator.id];
+    const score = item && Number.isFinite(Number(item.score)) ? Number(item.score) : null;
+    const contribution = score === null ? 0 : roundRiskScore(score * indicator.weight);
+    return { indicator, item, score, contribution };
+  });
+
+  const score = roundRiskScore(details.reduce((sum, detail) => sum + detail.contribution, 0));
+  return {
+    id: model.id,
+    label: model.label,
+    score,
+    regime: getMacroRiskRegime(score),
+    details,
+    missing: details.filter(detail => !detail.item).map(detail => detail.indicator.id)
+  };
+}
+
+function buildCurrentMacroRiskSnapshot() {
+  const reset = calculateMacroRiskModel(MACRO_RISK_CONFIG.resetRisk, MACRO_RISK_CURRENT_INDICATORS.resetRisk);
+  const bubble = calculateMacroRiskModel(MACRO_RISK_CONFIG.bubbleRisk, MACRO_RISK_CURRENT_INDICATORS.bubbleRisk);
+
+  return {
+    date: MACRO_RISK_CURRENT_INDICATORS.asOf,
+    resetScore: reset.score,
+    resetRegime: reset.regime,
+    bubbleScore: bubble.score,
+    bubbleRegime: bubble.regime,
+    source: 'currentIndicatorSnapshot'
+  };
+}
+
+function getMacroRiskHistoryWithCurrentSnapshot() {
+  const current = buildCurrentMacroRiskSnapshot();
+  const historicalRows = MACRO_RISK_CONFIG.riskHistory.filter(item => item.date !== current.date);
+  return [...historicalRows, current].sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function getLatestMacroRiskSnapshot() {
+  const history = getMacroRiskHistoryWithCurrentSnapshot();
+  return history[history.length - 1];
 }
 
 function runMacroRiskModelSmokeTest() {
-  const resetScore = calculateWeightedRiskScore(MACRO_RISK_CONFIG.resetRisk, {
+  const resetManualScore = calculateWeightedRiskScore(MACRO_RISK_CONFIG.resetRisk, {
     debt_gdp: 3,
     inflation_yoy: 2,
     real_policy_rate: 2,
@@ -629,7 +687,7 @@ function runMacroRiskModelSmokeTest() {
     household_dsr: 1
   });
 
-  const bubbleScore = calculateWeightedRiskScore(MACRO_RISK_CONFIG.bubbleRisk, {
+  const bubbleManualScore = calculateWeightedRiskScore(MACRO_RISK_CONFIG.bubbleRisk, {
     valuation_proxy: 3,
     nfci: 0,
     hy_spread_bps: 1,
@@ -637,28 +695,42 @@ function runMacroRiskModelSmokeTest() {
     total_credit_growth_yoy: 0
   });
 
+  const current = buildCurrentMacroRiskSnapshot();
+
   return {
     reset: {
-      score: resetScore,
-      regime: getMacroRiskRegime(resetScore),
+      score: current.resetScore,
+      regime: current.resetRegime,
+      manualScore: resetManualScore,
       expectedScore: 1.7,
       expectedRegime: 'Elevated',
-      pass: resetScore === 1.7 && getMacroRiskRegime(resetScore) === 'Elevated'
+      pass: current.resetScore === 1.7 && current.resetRegime === 'Elevated' && resetManualScore === 1.7
     },
     bubble: {
-      score: bubbleScore,
-      regime: getMacroRiskRegime(bubbleScore),
+      score: current.bubbleScore,
+      regime: current.bubbleRegime,
+      manualScore: bubbleManualScore,
       expectedScore: 1.1,
       expectedRegime: 'Moderate',
-      pass: bubbleScore === 1.1 && getMacroRiskRegime(bubbleScore) === 'Moderate'
+      pass: current.bubbleScore === 1.1 && current.bubbleRegime === 'Moderate' && bubbleManualScore === 1.1
+    },
+    history: {
+      latestDate: current.date,
+      latestSource: current.source,
+      pass: getLatestMacroRiskSnapshot().date === current.date
     }
   };
 }
 
-
-function getLatestMacroRiskSnapshot() {
-  const history = MACRO_RISK_CONFIG.riskHistory;
-  return history[history.length - 1];
+function runMacroRiskEngineSmokeTest() {
+  const smoke = runMacroRiskModelSmokeTest();
+  return {
+    resetPass: smoke.reset.pass,
+    bubblePass: smoke.bubble.pass,
+    historyPass: smoke.history.pass,
+    allPass: smoke.reset.pass && smoke.bubble.pass && smoke.history.pass,
+    details: smoke
+  };
 }
 
 function getRegimeBadgeClass(regime) {
@@ -717,7 +789,7 @@ function updateRiskHistoryTable() {
   const footerEl = document.getElementById('risk-history-footer');
   if (!rowsEl || !footerEl) return;
 
-  const history = MACRO_RISK_CONFIG.riskHistory;
+  const history = getMacroRiskHistoryWithCurrentSnapshot();
   rowsEl.innerHTML = history.map((item, index) => {
     const previous = history[index - 1];
     const resetDelta = formatRiskDelta(item.resetScore, previous ? previous.resetScore : null);
@@ -737,7 +809,6 @@ function updateRiskHistoryTable() {
   const latest = history[history.length - 1];
   footerEl.textContent = 'Latest monthly read: ' + formatMacroRiskDate(latest.date) + ' — ' + latest.resetRegime + ' reset risk and ' + latest.bubbleRegime + ' bubble risk.';
 }
-
 
 function getScoreBadgeClass(score) {
   const numericScore = Number(score);
@@ -759,14 +830,11 @@ function renderMacroBreakdownCards(model, snapshot, containerId, footerId) {
   const footer = document.getElementById(footerId);
   if (!container || !footer) return null;
 
-  let total = 0;
+  const result = calculateMacroRiskModel(model, snapshot);
 
-  container.innerHTML = model.indicators.map(indicator => {
-    const item = snapshot[indicator.id];
+  container.innerHTML = result.details.map(detail => {
+    const { indicator, item, contribution } = detail;
     if (!item) return '';
-
-    const contribution = Math.round((Number(item.score) * indicator.weight) * 100) / 100;
-    total += contribution;
 
     return `
       <div class="macro-breakdown-card">
@@ -784,10 +852,8 @@ function renderMacroBreakdownCards(model, snapshot, containerId, footerId) {
     `;
   }).join('');
 
-  const roundedTotal = Math.round(total * 100) / 100;
-  const regime = getMacroRiskRegime(roundedTotal);
-  footer.textContent = model.label + ': weighted indicator total = ' + roundedTotal.toFixed(2) + ' / 3 (' + regime + '). Static snapshot as of ' + formatMacroRiskDate(MACRO_RISK_CURRENT_INDICATORS.asOf) + '; live FRED wiring comes after this section is visually verified.';
-  return roundedTotal;
+  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared current-indicator snapshot as of ' + formatMacroRiskDate(MACRO_RISK_CURRENT_INDICATORS.asOf) + '; live FRED wiring comes after this engine is verified.';
+  return result.score;
 }
 
 function updateMacroRiskIndicatorBreakdowns() {
