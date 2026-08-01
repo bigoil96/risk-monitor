@@ -279,7 +279,7 @@
         <div><span class="macro-freshness-status badge-loading">Pending</span></div>
       </div>
     </div>
-    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. DGS10 updates the Reset Risk score; all other series are still diagnostics-only.</div>
+    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. Direct and derived macro indicators, including the SP500/CP valuation proxy, update the Excel-style scores as data is available.</div>
   </div>
   <div class="section-label">Risk history</div>
   <div class="risk-history-block" id="risk-history-block">
@@ -637,8 +637,7 @@ const MACRO_RISK_CURRENT_INDICATORS = Object.freeze({
 });
 
 
-// Live macro risk overrides. Step 9 wires direct FRED indicators plus tested derived indicators into the Excel-style scores.
-// Valuation proxy remains on the validated July snapshot until its percentile/merge calculation is tested separately.
+// Live macro risk overrides. Step 10 wires direct FRED indicators, tested derived indicators, and the SP500/CP valuation proxy into the Excel-style scores.
 let macroRiskLiveOverrides = {
   asOf: null,
   resetRisk: {},
@@ -692,9 +691,10 @@ const MACRO_LIVE_DIRECT_SERIES_MAP = Object.freeze({
 });
 
 const MACRO_LIVE_DERIVED_SERIES_IDS = Object.freeze(['CPIAUCSL', 'FEDFUNDS', 'TOTALSL']);
+const MACRO_LIVE_VALUATION_SERIES_IDS = Object.freeze(['SP500', 'CP']);
 
 function isMacroSeriesWiredToScore(seriesId) {
-  return Object.prototype.hasOwnProperty.call(MACRO_LIVE_DIRECT_SERIES_MAP, seriesId) || MACRO_LIVE_DERIVED_SERIES_IDS.includes(seriesId);
+  return Object.prototype.hasOwnProperty.call(MACRO_LIVE_DIRECT_SERIES_MAP, seriesId) || MACRO_LIVE_DERIVED_SERIES_IDS.includes(seriesId) || MACRO_LIVE_VALUATION_SERIES_IDS.includes(seriesId);
 }
 
 function formatMacroLiveDisplay(value, displayType) {
@@ -904,6 +904,104 @@ async function applyLiveDerivedMacroRiskOverrides() {
   }
 }
 
+function calculatePercentileRankInclusive(value, historyValues) {
+  const numericValue = Number(value);
+  const valid = (Array.isArray(historyValues) ? historyValues : [])
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  if (!Number.isFinite(numericValue) || !valid.length) return null;
+
+  const lessThanOrEqualCount = valid.filter(item => item <= numericValue).length;
+  return (lessThanOrEqualCount / valid.length) * 100;
+}
+
+function calculateIndicatorScoreFromPercentile(indicator, percentile) {
+  const numericPercentile = Number(percentile);
+  if (!indicator || !Number.isFinite(numericPercentile)) return null;
+
+  for (const threshold of indicator.thresholds || []) {
+    if (Object.prototype.hasOwnProperty.call(threshold, 'percentileMin') && numericPercentile >= threshold.percentileMin) {
+      return threshold.score;
+    }
+  }
+  return null;
+}
+
+function alignSp500ToCorporateProfits(sp500Observations, cpObservations) {
+  const sp500 = normalizeFredObservations(sp500Observations).sort((a, b) => a.date.localeCompare(b.date));
+  const cp = normalizeFredObservations(cpObservations).sort((a, b) => a.date.localeCompare(b.date));
+  if (!sp500.length || !cp.length) return [];
+
+  const aligned = [];
+  let cpIndex = 0;
+
+  sp500.forEach(spRow => {
+    while (cpIndex + 1 < cp.length && cp[cpIndex + 1].date <= spRow.date) {
+      cpIndex += 1;
+    }
+
+    const cpRow = cp[cpIndex];
+    if (!cpRow || cpRow.date > spRow.date || !Number.isFinite(cpRow.value) || cpRow.value <= 0) return;
+
+    aligned.push({
+      date: spRow.date,
+      sp500: spRow.value,
+      cp: cpRow.value,
+      cpDate: cpRow.date,
+      value: spRow.value / cpRow.value
+    });
+  });
+
+  return aligned;
+}
+
+function buildValuationProxyOverrideFromSeries(sp500Observations, cpObservations) {
+  const aligned = alignSp500ToCorporateProfits(sp500Observations, cpObservations)
+    .filter(row => Number.isFinite(row.value) && row.value > 0);
+  if (!aligned.length) return null;
+
+  const latest = aligned[aligned.length - 1];
+  const values = aligned.map(row => row.value);
+  const percentile = calculatePercentileRankInclusive(latest.value, values);
+  const valuationIndicator = findMacroIndicator(MACRO_RISK_CONFIG.bubbleRisk, 'valuation_proxy');
+  const score = calculateIndicatorScoreFromPercentile(valuationIndicator, percentile);
+  if (score === null) return null;
+
+  return {
+    modelKey: 'bubbleRisk',
+    indicatorId: 'valuation_proxy',
+    date: latest.date,
+    override: {
+      value: latest.value,
+      display: latest.value.toFixed(2) + 'x',
+      score,
+      note: 'Live SP500/Corporate Profits proxy using FRED SP500 as of ' + formatMacroRiskDate(latest.date) + ' and CP as of ' + formatMacroRiskDate(latest.cpDate) + '; historical percentile ' + Math.round(percentile) + 'th.'
+    },
+    debug: {
+      percentile,
+      alignedCount: aligned.length,
+      sp500: latest.sp500,
+      cp: latest.cp,
+      cpDate: latest.cpDate
+    }
+  };
+}
+
+async function applyLiveValuationProxyMacroRiskOverride() {
+  try {
+    const [sp500, cp] = await Promise.all([
+      fetchFredObservations('SP500', 7500),
+      fetchFredObservations('CP', 350)
+    ]);
+    const valuationOverride = buildValuationProxyOverrideFromSeries(sp500, cp);
+    return applyMacroRiskOverrideItems([valuationOverride]);
+  } catch (error) {
+    console.warn('Live valuation proxy macro risk update failed', error);
+    return false;
+  }
+}
+
 function runLiveDirectMacroRiskSmokeTest() {
   const originalOverrides = macroRiskLiveOverrides;
   const mockRows = [
@@ -1005,15 +1103,68 @@ function runLiveDerivedMacroRiskSmokeTest() {
   };
 }
 
+
+function runLiveValuationProxySmokeTest() {
+  const originalOverrides = macroRiskLiveOverrides;
+  const sp500 = [
+    { date: '2025-01-01', value: '100' },
+    { date: '2025-02-01', value: '110' },
+    { date: '2025-03-01', value: '120' },
+    { date: '2025-04-01', value: '130' },
+    { date: '2025-05-01', value: '140' },
+    { date: '2025-06-01', value: '150' },
+    { date: '2025-07-01', value: '160' },
+    { date: '2025-08-01', value: '170' },
+    { date: '2025-09-01', value: '180' },
+    { date: '2025-10-01', value: '189' }
+  ];
+  const cp = [
+    { date: '2025-01-01', value: '100' },
+    { date: '2025-04-01', value: '100' },
+    { date: '2025-07-01', value: '100' }
+  ];
+
+  const valuationOverride = buildValuationProxyOverrideFromSeries(sp500, cp);
+  applyMacroRiskOverrideItems([valuationOverride]);
+  const snapshot = buildCurrentMacroRiskSnapshot();
+  const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
+  macroRiskLiveOverrides = originalOverrides;
+
+  const valuation = currentIndicators.bubbleRisk.valuation_proxy;
+  const percentile = valuationOverride && valuationOverride.debug ? valuationOverride.debug.percentile : null;
+
+  return {
+    valuationOverrideCreated: Boolean(valuationOverride),
+    alignedCount: valuationOverride && valuationOverride.debug ? valuationOverride.debug.alignedCount : 0,
+    ratioPass: Boolean(valuation && Math.abs(valuation.value - 1.89) < 0.000001),
+    percentilePass: Boolean(Number.isFinite(percentile) && percentile >= 90),
+    scorePass: Boolean(valuation && valuation.score === 3),
+    bubblePass: snapshot.bubbleScore === 1.1 && snapshot.bubbleRegime === 'Moderate',
+    allPass: Boolean(
+      valuationOverride &&
+      valuation &&
+      Math.abs(valuation.value - 1.89) < 0.000001 &&
+      Number.isFinite(percentile) &&
+      percentile >= 90 &&
+      valuation.score === 3 &&
+      snapshot.bubbleScore === 1.1 &&
+      snapshot.bubbleRegime === 'Moderate'
+    )
+  };
+}
+
 function runMacroLiveBatchSmokeTest() {
   const direct = runLiveDirectMacroRiskSmokeTest();
   const derived = runLiveDerivedMacroRiskSmokeTest();
+  const valuation = runLiveValuationProxySmokeTest();
   return {
     directPass: direct.allPass,
     derivedPass: derived.allPass,
-    allPass: Boolean(direct.allPass && derived.allPass),
+    valuationPass: valuation.allPass,
+    allPass: Boolean(direct.allPass && derived.allPass && valuation.allPass),
     direct,
-    derived
+    derived,
+    valuation
   };
 }
 
@@ -1271,7 +1422,7 @@ function renderMacroBreakdownCards(model, snapshot, containerId, footerId) {
   }).join('');
 
   const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
-  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared indicator snapshot as of ' + formatMacroRiskDate(currentIndicators.asOf) + '. Live wiring status: direct FRED indicators plus CPI YoY, real policy rate, and total credit growth are live; valuation proxy remains on the validated July snapshot until its percentile calculation is tested.';
+  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared indicator snapshot as of ' + formatMacroRiskDate(currentIndicators.asOf) + '. Live wiring status: direct FRED indicators, CPI YoY, real policy rate, total credit growth, and the SP500/CP valuation proxy are wired into the score when data is available.';
   return result.score;
 }
 
@@ -1409,8 +1560,8 @@ function renderMacroDataFreshnessRows(rows) {
 
   const failures = rows.filter(row => row.error).length;
   footerEl.textContent = failures === 0
-    ? 'FRED diagnostics loaded successfully. Direct FRED indicators plus CPI YoY, real policy rate, and total credit growth are wired into Reset/Bubble Risk; valuation proxy remains diagnostics-only until its percentile calculation is tested.'
-    : `FRED diagnostics loaded with ${failures} unavailable series. Available direct and tested derived indicators update the macro scores; unavailable series and the valuation proxy remain on the validated July snapshot.`;
+    ? 'FRED diagnostics loaded successfully. Direct FRED indicators, derived indicators, and the SP500/CP valuation proxy are wired into Reset/Bubble Risk when data is available.'
+    : `FRED diagnostics loaded with ${failures} unavailable series. Available direct, derived, and valuation indicators update the macro scores; unavailable series remain on the validated July snapshot.`;
 }
 
 async function updateMacroDataFreshness() {
@@ -1442,6 +1593,7 @@ async function updateMacroDataFreshness() {
   renderMacroDataFreshnessRows(rows);
   applyLiveMacroRiskOverridesFromFreshnessRows(rows);
   await applyLiveDerivedMacroRiskOverrides();
+  await applyLiveValuationProxyMacroRiskOverride();
   return rows;
 }
 
@@ -1461,7 +1613,8 @@ function runMacroDataFreshnessSmokeTest() {
     quarterlyStatusPass: quarterlyStatus.label === 'Current',
     formatBpsPass: formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps',
     derivedSeriesMarkedWiredPass: Boolean(isMacroSeriesWiredToScore('CPIAUCSL') && isMacroSeriesWiredToScore('FEDFUNDS') && isMacroSeriesWiredToScore('TOTALSL')),
-    allPass: Boolean(latest && latest.date === '2026-06-30' && monthlyStatus.label === 'Current' && quarterlyStatus.label === 'Current' && formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps' && isMacroSeriesWiredToScore('CPIAUCSL') && isMacroSeriesWiredToScore('FEDFUNDS') && isMacroSeriesWiredToScore('TOTALSL'))
+    valuationSeriesMarkedWiredPass: Boolean(isMacroSeriesWiredToScore('SP500') && isMacroSeriesWiredToScore('CP')),
+    allPass: Boolean(latest && latest.date === '2026-06-30' && monthlyStatus.label === 'Current' && quarterlyStatus.label === 'Current' && formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps' && isMacroSeriesWiredToScore('CPIAUCSL') && isMacroSeriesWiredToScore('FEDFUNDS') && isMacroSeriesWiredToScore('TOTALSL') && isMacroSeriesWiredToScore('SP500') && isMacroSeriesWiredToScore('CP'))
   };
 }
 
