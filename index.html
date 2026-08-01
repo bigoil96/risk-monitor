@@ -279,7 +279,7 @@
         <div><span class="macro-freshness-status badge-loading">Pending</span></div>
       </div>
     </div>
-    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. This diagnostic does not change the macro-risk score yet.</div>
+    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. DGS10 updates the Reset Risk score; all other series are still diagnostics-only.</div>
   </div>
   <div class="section-label">Risk history</div>
   <div class="risk-history-block" id="risk-history-block">
@@ -615,7 +615,7 @@ const MACRO_RISK_CONFIG = Object.freeze({
   ]
 });
 
-// Latest validated Excel indicator snapshot. Static for now; later steps will replace each value with live data pulls after validation.
+// Latest validated Excel indicator snapshot. Static baseline; live overrides are layered on one indicator at a time after validation.
 const MACRO_RISK_CURRENT_INDICATORS = Object.freeze({
   asOf: '2026-07-31',
   resetRisk: {
@@ -635,6 +635,120 @@ const MACRO_RISK_CURRENT_INDICATORS = Object.freeze({
     total_credit_growth_yoy: { value: 2.27, display: '2.27%', score: 0, note: 'No credit boom' }
   }
 });
+
+
+// Live macro risk overrides. Step 7 wires only DGS10 into the Excel-style score.
+// All other indicators remain on the validated July snapshot until each live input is tested separately.
+let macroRiskLiveOverrides = {
+  asOf: null,
+  resetRisk: {},
+  bubbleRisk: {}
+};
+
+function cloneMacroRiskIndicatorSnapshot(snapshot) {
+  return {
+    asOf: snapshot.asOf,
+    resetRisk: { ...snapshot.resetRisk },
+    bubbleRisk: { ...snapshot.bubbleRisk }
+  };
+}
+
+function getCurrentMacroRiskIndicatorSnapshot() {
+  const snapshot = cloneMacroRiskIndicatorSnapshot(MACRO_RISK_CURRENT_INDICATORS);
+  snapshot.resetRisk = { ...snapshot.resetRisk, ...macroRiskLiveOverrides.resetRisk };
+  snapshot.bubbleRisk = { ...snapshot.bubbleRisk, ...macroRiskLiveOverrides.bubbleRisk };
+  snapshot.asOf = macroRiskLiveOverrides.asOf || snapshot.asOf;
+  return snapshot;
+}
+
+function findMacroIndicator(model, indicatorId) {
+  return model.indicators.find(indicator => indicator.id === indicatorId) || null;
+}
+
+function calculateIndicatorScoreFromThresholds(indicator, rawValue) {
+  const value = Number(rawValue);
+  if (!indicator || !Number.isFinite(value)) return null;
+
+  for (const threshold of indicator.thresholds || []) {
+    if (Object.prototype.hasOwnProperty.call(threshold, 'min') && value >= threshold.min) {
+      return threshold.score;
+    }
+    if (Object.prototype.hasOwnProperty.call(threshold, 'max') && value < threshold.max) {
+      return threshold.score;
+    }
+  }
+  return null;
+}
+
+function formatTenYearYieldDisplay(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(2) + '%' : '—';
+}
+
+function buildLiveTenYearYieldOverride(observation) {
+  const indicator = findMacroIndicator(MACRO_RISK_CONFIG.resetRisk, 'ten_year_yield');
+  const value = Number(observation && observation.value);
+  const score = calculateIndicatorScoreFromThresholds(indicator, value);
+  if (!indicator || !Number.isFinite(value) || score === null) return null;
+
+  return {
+    value,
+    display: formatTenYearYieldDisplay(value),
+    score,
+    note: 'Live from FRED DGS10 as of ' + formatMacroRiskDate(observation.date) + '; wired into Reset Risk score.'
+  };
+}
+
+function applyLiveMacroRiskOverridesFromFreshnessRows(rows) {
+  const tenYearRow = Array.isArray(rows) ? rows.find(row => row.seriesId === 'DGS10' && !row.error) : null;
+  const tenYearOverride = buildLiveTenYearYieldOverride(tenYearRow);
+  if (!tenYearOverride) return false;
+
+  macroRiskLiveOverrides = {
+    ...macroRiskLiveOverrides,
+    asOf: tenYearRow.date || macroRiskLiveOverrides.asOf,
+    resetRisk: {
+      ...macroRiskLiveOverrides.resetRisk,
+      ten_year_yield: tenYearOverride
+    }
+  };
+
+  updateMacroRiskSummaryCards();
+  updateMacroRiskIndicatorBreakdowns();
+  updateRiskHistoryTable();
+  return true;
+}
+
+function runLiveTenYearYieldSmokeTest() {
+  const indicator = findMacroIndicator(MACRO_RISK_CONFIG.resetRisk, 'ten_year_yield');
+  const originalOverrides = macroRiskLiveOverrides;
+  const liveOverride = buildLiveTenYearYieldOverride({ date: '2026-07-31', value: 4.49 });
+
+  macroRiskLiveOverrides = {
+    asOf: '2026-07-31',
+    resetRisk: { ten_year_yield: liveOverride },
+    bubbleRisk: {}
+  };
+  const snapshot = buildCurrentMacroRiskSnapshot();
+  macroRiskLiveOverrides = originalOverrides;
+
+  return {
+    scoreBelowFourPass: calculateIndicatorScoreFromThresholds(indicator, 3.99) === 0,
+    scoreFourToFivePass: calculateIndicatorScoreFromThresholds(indicator, 4.49) === 1,
+    scoreFiveToSixPass: calculateIndicatorScoreFromThresholds(indicator, 5.01) === 2,
+    scoreSixPlusPass: calculateIndicatorScoreFromThresholds(indicator, 6.00) === 3,
+    overrideDisplayPass: liveOverride && liveOverride.display === '4.49%' && liveOverride.score === 1,
+    snapshotPass: snapshot.resetScore === 1.7 && snapshot.resetRegime === 'Elevated',
+    allPass: Boolean(
+      calculateIndicatorScoreFromThresholds(indicator, 3.99) === 0 &&
+      calculateIndicatorScoreFromThresholds(indicator, 4.49) === 1 &&
+      calculateIndicatorScoreFromThresholds(indicator, 5.01) === 2 &&
+      calculateIndicatorScoreFromThresholds(indicator, 6.00) === 3 &&
+      liveOverride && liveOverride.display === '4.49%' && liveOverride.score === 1 &&
+      snapshot.resetScore === 1.7 && snapshot.resetRegime === 'Elevated'
+    )
+  };
+}
 
 function getMacroRiskRegime(score) {
   const match = MACRO_RISK_CONFIG.regimes.find(regime => score >= regime.min && score < regime.maxExclusive);
@@ -683,11 +797,12 @@ function calculateMacroRiskModel(model, snapshot) {
 }
 
 function buildCurrentMacroRiskSnapshot() {
-  const reset = calculateMacroRiskModel(MACRO_RISK_CONFIG.resetRisk, MACRO_RISK_CURRENT_INDICATORS.resetRisk);
-  const bubble = calculateMacroRiskModel(MACRO_RISK_CONFIG.bubbleRisk, MACRO_RISK_CURRENT_INDICATORS.bubbleRisk);
+  const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
+  const reset = calculateMacroRiskModel(MACRO_RISK_CONFIG.resetRisk, currentIndicators.resetRisk);
+  const bubble = calculateMacroRiskModel(MACRO_RISK_CONFIG.bubbleRisk, currentIndicators.bubbleRisk);
 
   return {
-    date: MACRO_RISK_CURRENT_INDICATORS.asOf,
+    date: currentIndicators.asOf,
     resetScore: reset.score,
     resetRegime: reset.regime,
     bubbleScore: bubble.score,
@@ -883,21 +998,23 @@ function renderMacroBreakdownCards(model, snapshot, containerId, footerId) {
     `;
   }).join('');
 
-  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared current-indicator snapshot as of ' + formatMacroRiskDate(MACRO_RISK_CURRENT_INDICATORS.asOf) + '; live FRED wiring comes after this engine is verified.';
+  const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
+  footer.textContent = model.label + ': weighted indicator total = ' + result.score.toFixed(2) + ' / 3 (' + result.regime + '). Computed from the shared indicator snapshot as of ' + formatMacroRiskDate(currentIndicators.asOf) + '. Live wiring status: DGS10 is live; remaining indicators still use the validated July snapshot.';
   return result.score;
 }
 
 function updateMacroRiskIndicatorBreakdowns() {
+  const currentIndicators = getCurrentMacroRiskIndicatorSnapshot();
   const resetTotal = renderMacroBreakdownCards(
     MACRO_RISK_CONFIG.resetRisk,
-    MACRO_RISK_CURRENT_INDICATORS.resetRisk,
+    currentIndicators.resetRisk,
     'reset-risk-breakdown-cards',
     'reset-risk-breakdown-footer'
   );
 
   const bubbleTotal = renderMacroBreakdownCards(
     MACRO_RISK_CONFIG.bubbleRisk,
-    MACRO_RISK_CURRENT_INDICATORS.bubbleRisk,
+    currentIndicators.bubbleRisk,
     'bubble-risk-breakdown-cards',
     'bubble-risk-breakdown-footer'
   );
@@ -1010,7 +1127,7 @@ function renderMacroDataFreshnessRows(rows) {
 
     return `
       <div class="macro-freshness-row">
-        <div class="macro-freshness-name">${row.label}<span class="macro-freshness-series">${row.seriesId} • ${row.cadence.replace('_', ' ')}</span></div>
+        <div class="macro-freshness-name">${row.label}<span class="macro-freshness-series">${row.seriesId} • ${row.cadence.replace('_', ' ')}${row.seriesId === 'DGS10' ? ' • wired to score' : ''}</span></div>
         <div class="macro-freshness-date">${dateLabel}</div>
         <div class="macro-freshness-value">${valueLabel}</div>
         <div><span class="macro-freshness-status ${status.className}">${status.label}</span><div class="risk-history-change">${ageLabel}</div></div>
@@ -1020,8 +1137,8 @@ function renderMacroDataFreshnessRows(rows) {
 
   const failures = rows.filter(row => row.error).length;
   footerEl.textContent = failures === 0
-    ? 'FRED diagnostics loaded successfully. This section verifies data availability only; live values are not yet wired into the Excel macro-risk score.'
-    : `FRED diagnostics loaded with ${failures} unavailable series. The Excel macro-risk score still uses the validated static July snapshot until live wiring is tested indicator-by-indicator.`;
+    ? 'FRED diagnostics loaded successfully. DGS10 is now wired into Reset Risk; all other indicators remain diagnostics-only until tested individually.'
+    : `FRED diagnostics loaded with ${failures} unavailable series. DGS10 updates the Reset Risk score when available; remaining unavailable or unwired series do not change the validated July snapshot.`;
 }
 
 async function updateMacroDataFreshness() {
@@ -1051,6 +1168,7 @@ async function updateMacroDataFreshness() {
   }));
 
   renderMacroDataFreshnessRows(rows);
+  applyLiveMacroRiskOverridesFromFreshnessRows(rows);
   return rows;
 }
 
