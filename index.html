@@ -87,6 +87,17 @@
   .macro-breakdown-badge { position: absolute; top: 14px; right: 14px; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; }
   .macro-breakdown-footer { font-size: 12px; color: var(--text3); line-height: 1.6; margin-bottom: 24px; }
 
+  .macro-freshness-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+  .macro-freshness-header, .macro-freshness-row { display: grid; grid-template-columns: 1.3fr 0.9fr 0.9fr 0.8fr; gap: 12px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+  .macro-freshness-header { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; background: var(--bg3); }
+  .macro-freshness-row { font-size: 13px; color: var(--text2); }
+  .macro-freshness-row:last-child { border-bottom: none; }
+  .macro-freshness-name { color: var(--text); }
+  .macro-freshness-series { display: block; font-family: var(--mono); font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .macro-freshness-date, .macro-freshness-value { font-family: var(--mono); color: var(--text2); }
+  .macro-freshness-status { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .macro-freshness-footer { padding: 12px 18px; font-size: 12px; color: var(--text3); border-top: 1px solid var(--border); line-height: 1.6; }
+
   .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 
   .indicators-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
@@ -184,6 +195,7 @@
     .indicators-grid { grid-template-columns: 1fr 1fr; }
     .macro-risk-grid { grid-template-columns: 1fr; }
     .risk-history-header, .risk-history-row { grid-template-columns: 1fr; gap: 4px; }
+    .macro-freshness-header, .macro-freshness-row { grid-template-columns: 1fr; gap: 4px; }
     .risk-history-header { display: none; }
   }
 </style>
@@ -250,6 +262,25 @@
     <div class="macro-breakdown-footer" id="bubble-risk-breakdown-footer">Loading Bubble Risk contributors...</div>
   </div>
 
+
+  <div class="section-label">Macro data freshness</div>
+  <div class="macro-freshness-block" id="macro-data-freshness-block">
+    <div class="macro-freshness-header">
+      <div>Indicator</div>
+      <div>Latest date</div>
+      <div>Latest value</div>
+      <div>Status</div>
+    </div>
+    <div id="macro-data-freshness-rows">
+      <div class="macro-freshness-row">
+        <div class="macro-freshness-name">Waiting for refresh<span class="macro-freshness-series">FRED diagnostics not loaded yet</span></div>
+        <div class="macro-freshness-date">—</div>
+        <div class="macro-freshness-value">—</div>
+        <div><span class="macro-freshness-status badge-loading">Pending</span></div>
+      </div>
+    </div>
+    <div class="macro-freshness-footer" id="macro-data-freshness-footer">Refresh data to verify the latest available FRED observations. This diagnostic does not change the macro-risk score yet.</div>
+  </div>
   <div class="section-label">Risk history</div>
   <div class="risk-history-block" id="risk-history-block">
     <div class="risk-history-header">
@@ -885,6 +916,163 @@ function updateMacroRiskIndicatorBreakdowns() {
   };
 }
 
+
+// ==============================
+// Macro data freshness diagnostics
+// Step 6: fetch latest FRED observations without changing risk scores yet.
+// ==============================
+const MACRO_DATA_FRESHNESS_SERIES = Object.freeze([
+  { seriesId: 'GFDEGDQ188S', label: 'Federal Debt / GDP', cadence: 'quarterly', display: 'percent' },
+  { seriesId: 'CPIAUCSL', label: 'CPI Index', cadence: 'monthly', display: 'number1' },
+  { seriesId: 'FEDFUNDS', label: 'Federal Funds Rate', cadence: 'monthly', display: 'percent' },
+  { seriesId: 'DGS10', label: '10Y Treasury Yield', cadence: 'daily', display: 'percent' },
+  { seriesId: 'T10Y3M', label: '10Y - 3M Yield Curve', cadence: 'daily', display: 'percent' },
+  { seriesId: 'HDTGPDUSQ163N', label: 'Household Debt / GDP', cadence: 'lagged_quarterly', display: 'percent' },
+  { seriesId: 'TDSP', label: 'Household Debt Service Ratio', cadence: 'quarterly', display: 'percent' },
+  { seriesId: 'SP500', label: 'S&P 500', cadence: 'daily', display: 'number0' },
+  { seriesId: 'CP', label: 'Corporate Profits', cadence: 'quarterly', display: 'number0' },
+  { seriesId: 'NFCI', label: 'National Financial Conditions Index', cadence: 'weekly', display: 'number2' },
+  { seriesId: 'BAMLH0A0HYM2', label: 'High-Yield Credit Spread', cadence: 'daily', display: 'bps_from_percent' },
+  { seriesId: 'DRTSCILM', label: 'C&I Loan Standards Tightening', cadence: 'quarterly', display: 'percent' },
+  { seriesId: 'TOTALSL', label: 'Total Credit', cadence: 'monthly', display: 'number0' }
+]);
+
+function getFreshnessThresholds(cadence) {
+  const thresholds = {
+    daily: { ok: 10, watch: 30 },
+    weekly: { ok: 21, watch: 45 },
+    monthly: { ok: 75, watch: 120 },
+    quarterly: { ok: 185, watch: 275 },
+    lagged_quarterly: { ok: 450, watch: 650 }
+  };
+  return thresholds[cadence] || thresholds.monthly;
+}
+
+function calculateFreshnessStatus(latestDateText, cadence, now = new Date()) {
+  const latestDate = new Date(latestDateText + 'T00:00:00');
+  if (Number.isNaN(latestDate.getTime())) {
+    return { label: 'Unknown', className: 'badge-loading', daysOld: null };
+  }
+
+  const daysOld = Math.max(0, Math.round((now - latestDate) / 86400000));
+  const threshold = getFreshnessThresholds(cadence);
+  if (daysOld <= threshold.ok) return { label: 'Current', className: 'badge-normal', daysOld };
+  if (daysOld <= threshold.watch) return { label: 'Lagging', className: 'badge-watch', daysOld };
+  return { label: 'Stale', className: 'badge-danger', daysOld };
+}
+
+function formatFredDiagnosticValue(value, display) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return '—';
+  if (display === 'percent') return numericValue.toFixed(2) + '%';
+  if (display === 'number0') return Math.round(numericValue).toLocaleString();
+  if (display === 'number1') return numericValue.toFixed(1);
+  if (display === 'number2') return numericValue.toFixed(2);
+  if (display === 'bps_from_percent') return Math.round(numericValue * 100) + ' bps';
+  return numericValue.toLocaleString();
+}
+
+function buildFredApiUrl(seriesId, limit = 10) {
+  const fredUrl = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&sort_order=desc&limit=${limit}&file_type=json`;
+  return 'https://corsproxy.io/?' + encodeURIComponent(fredUrl);
+}
+
+function getLatestValidObservation(observations) {
+  if (!Array.isArray(observations)) return null;
+  return observations.find(obs => obs && obs.value !== '.' && obs.value !== '' && Number.isFinite(Number(obs.value))) || null;
+}
+
+async function fetchLatestFredObservation(seriesId, limit = 10) {
+  const response = await fetch(buildFredApiUrl(seriesId, limit));
+  if (!response.ok) throw new Error(`FRED request failed for ${seriesId}: ${response.status}`);
+
+  const data = await response.json();
+  const observation = getLatestValidObservation(data.observations);
+  if (!observation) throw new Error(`No valid FRED observation for ${seriesId}`);
+
+  return {
+    seriesId,
+    date: observation.date,
+    value: Number(observation.value)
+  };
+}
+
+function renderMacroDataFreshnessRows(rows) {
+  const rowsEl = document.getElementById('macro-data-freshness-rows');
+  const footerEl = document.getElementById('macro-data-freshness-footer');
+  if (!rowsEl || !footerEl) return;
+
+  rowsEl.innerHTML = rows.map(row => {
+    const status = row.status || { label: 'Unavailable', className: 'badge-loading', daysOld: null };
+    const dateLabel = row.date ? formatMacroRiskDate(row.date) : '—';
+    const valueLabel = row.error ? '—' : formatFredDiagnosticValue(row.value, row.display);
+    const ageLabel = Number.isFinite(status.daysOld) ? `${status.daysOld}d old` : 'not loaded';
+
+    return `
+      <div class="macro-freshness-row">
+        <div class="macro-freshness-name">${row.label}<span class="macro-freshness-series">${row.seriesId} • ${row.cadence.replace('_', ' ')}</span></div>
+        <div class="macro-freshness-date">${dateLabel}</div>
+        <div class="macro-freshness-value">${valueLabel}</div>
+        <div><span class="macro-freshness-status ${status.className}">${status.label}</span><div class="risk-history-change">${ageLabel}</div></div>
+      </div>
+    `;
+  }).join('');
+
+  const failures = rows.filter(row => row.error).length;
+  footerEl.textContent = failures === 0
+    ? 'FRED diagnostics loaded successfully. This section verifies data availability only; live values are not yet wired into the Excel macro-risk score.'
+    : `FRED diagnostics loaded with ${failures} unavailable series. The Excel macro-risk score still uses the validated static July snapshot until live wiring is tested indicator-by-indicator.`;
+}
+
+async function updateMacroDataFreshness() {
+  const rowsEl = document.getElementById('macro-data-freshness-rows');
+  const footerEl = document.getElementById('macro-data-freshness-footer');
+  if (!rowsEl || !footerEl) return [];
+
+  rowsEl.innerHTML = '<div class="macro-freshness-row"><div class="macro-freshness-name">Loading FRED diagnostics<span class="macro-freshness-series">Checking latest observations</span></div><div class="macro-freshness-date">—</div><div class="macro-freshness-value">—</div><div><span class="macro-freshness-status badge-loading">Loading</span></div></div>';
+  footerEl.textContent = 'Fetching latest available observations from FRED...';
+
+  const rows = await Promise.all(MACRO_DATA_FRESHNESS_SERIES.map(async item => {
+    try {
+      const latest = await fetchLatestFredObservation(item.seriesId, 24);
+      return {
+        ...item,
+        date: latest.date,
+        value: latest.value,
+        status: calculateFreshnessStatus(latest.date, item.cadence)
+      };
+    } catch (error) {
+      return {
+        ...item,
+        error: error.message,
+        status: { label: 'Unavailable', className: 'badge-loading', daysOld: null }
+      };
+    }
+  }));
+
+  renderMacroDataFreshnessRows(rows);
+  return rows;
+}
+
+function runMacroDataFreshnessSmokeTest() {
+  const mockNow = new Date('2026-08-01T12:00:00');
+  const latest = getLatestValidObservation([
+    { date: '2026-07-01', value: '.' },
+    { date: '2026-06-30', value: '4.23' },
+    { date: '2026-05-31', value: '4.10' }
+  ]);
+  const monthlyStatus = calculateFreshnessStatus('2026-06-30', 'monthly', mockNow);
+  const quarterlyStatus = calculateFreshnessStatus('2026-04-01', 'quarterly', mockNow);
+
+  return {
+    latestObservationPass: latest && latest.date === '2026-06-30' && latest.value === '4.23',
+    monthlyStatusPass: monthlyStatus.label === 'Current',
+    quarterlyStatusPass: quarterlyStatus.label === 'Current',
+    formatBpsPass: formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps',
+    allPass: Boolean(latest && latest.date === '2026-06-30' && monthlyStatus.label === 'Current' && quarterlyStatus.label === 'Current' && formatFredDiagnosticValue(2.63, 'bps_from_percent') === '263 bps')
+  };
+}
+
 function updateClock() {
   document.getElementById('topbar-time').textContent = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
 }
@@ -1139,6 +1327,11 @@ async function fetchData() {
 
   updateOverallRisk();
   updateDCATracker();
+  try {
+    await updateMacroDataFreshness();
+  } catch (error) {
+    console.warn('Macro data freshness update failed', error);
+  }
   document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
 }
 
