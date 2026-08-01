@@ -65,6 +65,17 @@
   .macro-risk-card-score span { font-size: 13px; color: var(--text3); }
   .macro-risk-card-sub { font-size: 13px; color: var(--text3); line-height: 1.5; }
   .macro-risk-note { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-top: -20px; margin-bottom: 32px; font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .risk-history-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+  .risk-history-header, .risk-history-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 12px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+  .risk-history-header { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; background: var(--bg3); }
+  .risk-history-row { font-size: 13px; color: var(--text2); }
+  .risk-history-row:last-child { border-bottom: none; }
+  .risk-history-row-latest { background: var(--amber-bg); }
+  .risk-history-date { font-family: var(--mono); color: var(--text); }
+  .risk-history-score { font-family: var(--mono); color: var(--text); }
+  .risk-history-change { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+  .risk-history-regime { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
+  .risk-history-footer { padding: 12px 18px; font-size: 12px; color: var(--text3); border-top: 1px solid var(--border); }
 
   .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 
@@ -162,6 +173,8 @@
     .hero h1 { font-size: 22px; }
     .indicators-grid { grid-template-columns: 1fr 1fr; }
     .macro-risk-grid { grid-template-columns: 1fr; }
+    .risk-history-header, .risk-history-row { grid-template-columns: 1fr; gap: 4px; }
+    .risk-history-header { display: none; }
   }
 </style>
 </head>
@@ -217,6 +230,18 @@
     </div>
   </div>
   <div class="macro-risk-note" id="macro-risk-note">Loading Excel model snapshot...</div>
+
+  <div class="section-label">Risk history</div>
+  <div class="risk-history-block" id="risk-history-block">
+    <div class="risk-history-header">
+      <div>Date</div>
+      <div>Reset risk</div>
+      <div>Bubble risk</div>
+      <div>Combined read</div>
+    </div>
+    <div id="risk-history-rows"></div>
+    <div class="risk-history-footer" id="risk-history-footer">Loading monthly risk history...</div>
+  </div>
 
   <div class="section-label">Live market indicators</div>
   <div class="indicators-grid" id="indicators-grid">
@@ -632,6 +657,47 @@ function updateMacroRiskSummaryCards() {
   document.getElementById('macro-risk-note').textContent = 'Current macro posture: ' + latest.resetRegime + ' reset risk + ' + latest.bubbleRegime + ' bubble risk. This supports resilience and discipline without tactical panic.';
 }
 
+function formatRiskDelta(current, previous) {
+  if (!previous) return 'baseline';
+  const delta = Math.round((current - previous) * 10) / 10;
+  if (delta === 0) return 'flat';
+  return (delta > 0 ? '+' : '') + delta.toFixed(1);
+}
+
+function getCombinedMacroRiskRead(snapshot) {
+  if (!snapshot) return '—';
+  if (snapshot.resetRegime === 'Elevated' && snapshot.bubbleRegime === 'Elevated') return 'Broad caution';
+  if (snapshot.resetRegime === 'Elevated' && snapshot.bubbleRegime === 'Moderate') return 'Structural caution';
+  if (snapshot.resetRegime === 'Moderate' && snapshot.bubbleRegime === 'Elevated') return 'Cycle caution';
+  return 'Monitor';
+}
+
+function updateRiskHistoryTable() {
+  const rowsEl = document.getElementById('risk-history-rows');
+  const footerEl = document.getElementById('risk-history-footer');
+  if (!rowsEl || !footerEl) return;
+
+  const history = MACRO_RISK_CONFIG.riskHistory;
+  rowsEl.innerHTML = history.map((item, index) => {
+    const previous = history[index - 1];
+    const resetDelta = formatRiskDelta(item.resetScore, previous ? previous.resetScore : null);
+    const bubbleDelta = formatRiskDelta(item.bubbleScore, previous ? previous.bubbleScore : null);
+    const latestClass = index === history.length - 1 ? ' risk-history-row-latest' : '';
+
+    return `
+      <div class="risk-history-row${latestClass}">
+        <div class="risk-history-date">${formatMacroRiskDate(item.date)}</div>
+        <div><span class="risk-history-score">${item.resetScore.toFixed(1)}</span><span class="risk-history-regime ${getRegimeBadgeClass(item.resetRegime)}">${item.resetRegime}</span><div class="risk-history-change">MoM: ${resetDelta}</div></div>
+        <div><span class="risk-history-score">${item.bubbleScore.toFixed(1)}</span><span class="risk-history-regime ${getRegimeBadgeClass(item.bubbleRegime)}">${item.bubbleRegime}</span><div class="risk-history-change">MoM: ${bubbleDelta}</div></div>
+        <div>${getCombinedMacroRiskRead(item)}</div>
+      </div>
+    `;
+  }).join('');
+
+  const latest = history[history.length - 1];
+  footerEl.textContent = 'Latest monthly read: ' + formatMacroRiskDate(latest.date) + ' — ' + latest.resetRegime + ' reset risk and ' + latest.bubbleRegime + ' bubble risk.';
+}
+
 function updateClock() {
   document.getElementById('topbar-time').textContent = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
 }
@@ -927,6 +993,7 @@ function updateOverallRisk() {
 }
 
 updateMacroRiskSummaryCards();
+updateRiskHistoryTable();
 fetchData();
 </script>
 </body>
