@@ -920,9 +920,8 @@ function buildDerivedMacroRiskOverridesFromSeries(seriesData) {
 }
 
 async function fetchFredObservations(seriesId, limit = 400) {
-  const response = await fetch(buildFredApiUrl(seriesId, limit));
-  if (!response.ok) throw new Error(`FRED observations failed for ${seriesId}: ${response.status}`);
-  const data = await response.json();
+  const data = await fetchJsonWithFallbacks(buildFredRawApiUrl(seriesId, limit));
+  if (!data || !Array.isArray(data.observations)) throw new Error(`Invalid FRED observations payload for ${seriesId}`);
   return normalizeFredObservations(data.observations);
 }
 
@@ -1722,9 +1721,14 @@ function formatFredDiagnosticValue(value, display) {
   return numericValue.toLocaleString();
 }
 
+function buildFredRawApiUrl(seriesId, limit = 10) {
+  return `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&sort_order=desc&limit=${limit}&file_type=json`;
+}
+
+// Backward-compatible alias. Callers should pass this raw URL through fetchJsonWithFallbacks()
+// so the dashboard is not dependent on any single CORS proxy.
 function buildFredApiUrl(seriesId, limit = 10) {
-  const fredUrl = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&sort_order=desc&limit=${limit}&file_type=json`;
-  return 'https://corsproxy.io/?' + encodeURIComponent(fredUrl);
+  return buildFredRawApiUrl(seriesId, limit);
 }
 
 function getLatestValidObservation(observations) {
@@ -1733,10 +1737,8 @@ function getLatestValidObservation(observations) {
 }
 
 async function fetchLatestFredObservation(seriesId, limit = 10) {
-  const response = await fetch(buildFredApiUrl(seriesId, limit));
-  if (!response.ok) throw new Error(`FRED request failed for ${seriesId}: ${response.status}`);
-
-  const data = await response.json();
+  const data = await fetchJsonWithFallbacks(buildFredRawApiUrl(seriesId, limit));
+  if (!data || !Array.isArray(data.observations)) throw new Error(`Invalid FRED payload for ${seriesId}`);
   const observation = getLatestValidObservation(data.observations);
   if (!observation) throw new Error(`No valid FRED observation for ${seriesId}`);
 
@@ -2182,9 +2184,8 @@ async function fetchData() {
   };
   await Promise.all(Object.entries(fredSeries).map(async ([key, series]) => {
     try {
-      const url = proxy + encodeURIComponent(`https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`);
-      const r = await fetch(url);
-      const d = await r.json();
+      const rawUrl = buildFredRawApiUrl(series, 5);
+      const d = await fetchJsonWithFallbacks(rawUrl);
       // Get most recent non-null value
       const obs = d.observations.find(o => o.value !== '.');
       results[key] = parseFloat(obs.value);
@@ -2195,10 +2196,8 @@ async function fetchData() {
 
   // Fetch S&P from FRED
   try {
-    const fredBase = `https://api.stlouisfed.org/fred/series/observations?series_id=SP500&api_key=${FRED_API_KEY}&sort_order=desc&limit=5&file_type=json`;
-    const url = 'https://corsproxy.io/?' + encodeURIComponent(fredBase);
-    const r = await fetch(url);
-    const d = await r.json();
+    const fredBase = buildFredRawApiUrl('SP500', 5);
+    const d = await fetchJsonWithFallbacks(fredBase);
     const obs = d.observations.find(o => o.value !== '.');
     results.spy = parseFloat(obs.value);
   } catch(e) {
@@ -2425,14 +2424,17 @@ async function fetchData() {
     if (hyDot) hyDot.style.background = 'var(--text3)';
   }
 
+  let macroRows = [];
   try {
-    await updateMacroDataFreshness();
+    macroRows = await updateMacroDataFreshness();
   } catch (error) {
     console.warn('Macro data freshness update failed', error);
   }
   updateOverallRisk();
   updateDCATracker();
-  document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
+  const macroFailures = Array.isArray(macroRows) ? macroRows.filter(row => row && row.error).length : 0;
+  const statusSuffix = macroFailures > 0 ? ` • ${macroFailures} macro source${macroFailures === 1 ? '' : 's'} unavailable` : ' • macro sources refreshed';
+  document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString() + statusSuffix;
 }
 
 function calculateTacticalStressOverlayScore(data) {
