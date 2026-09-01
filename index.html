@@ -411,7 +411,7 @@
 
   <div class="section-label">Score timing</div>
   <div class="score-timing-block" id="score-timing-block">
-    <strong>Current live score:</strong> updates on page load and Refresh Data using latest available FRED/market data. <strong>Monthly history:</strong> validated month-end snapshots; archive rows stay frozen until we intentionally add the next month.
+    <strong>Current live score:</strong> updates on page load and Refresh Data using latest available FRED/market data. <strong>Monthly history:</strong> frozen validated snapshots; Aug 31, 2026 is archived at Reset 1.5 / Moderate and Bubble 1.1 / Moderate.
   </div>
 
 
@@ -455,11 +455,11 @@ let marketData = {};
 // Step 1 is intentionally no-op: existing UI remains unchanged until we wire this in.
 // ==============================
 const MACRO_RISK_CONFIG = Object.freeze({
-  version: '2026-08-01',
+  version: '2026-08-31',
   regimes: [
     { id: 'low', label: 'Low', min: 0, maxExclusive: 0.75 },
-    { id: 'moderate', label: 'Moderate', min: 0.75, maxExclusive: 1.5 },
-    { id: 'elevated', label: 'Elevated', min: 1.5, maxExclusive: 2.25 },
+    { id: 'moderate', label: 'Moderate', min: 0.75, maxInclusive: 1.5 },
+    { id: 'elevated', label: 'Elevated', minExclusive: 1.5, maxExclusive: 2.25 },
     { id: 'high', label: 'High', min: 2.25, maxExclusive: Infinity }
   ],
   resetRisk: {
@@ -650,7 +650,8 @@ const MACRO_RISK_CONFIG = Object.freeze({
     { date: '2026-04-30', resetScore: 1.6, resetRegime: 'Elevated', bubbleScore: 1.5, bubbleRegime: 'Elevated' },
     { date: '2026-05-31', resetScore: 1.6, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' },
     { date: '2026-06-30', resetScore: 1.7, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' },
-    { date: '2026-07-31', resetScore: 1.7, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' }
+    { date: '2026-07-31', resetScore: 1.7, resetRegime: 'Elevated', bubbleScore: 1.1, bubbleRegime: 'Moderate' },
+    { date: '2026-08-31', resetScore: 1.5, resetRegime: 'Moderate', bubbleScore: 1.1, bubbleRegime: 'Moderate', note: 'Validated month-end snapshot. Reset risk improved as inflation pressure eased; bubble risk remained moderate.' }
   ]
 });
 
@@ -676,7 +677,7 @@ const MACRO_RISK_CURRENT_INDICATORS = Object.freeze({
 });
 
 
-// Live macro risk overrides. Step 10 wires direct FRED indicators, tested derived indicators, and the SP500/CP valuation proxy into the Excel-style scores.
+// Live macro risk overrides. Live engine wires direct FRED indicators, tested derived indicators, and the SP500/CP valuation proxy into the Excel-style scores.
 let macroRiskLiveOverrides = {
   asOf: null,
   resetRisk: {},
@@ -1214,7 +1215,17 @@ function runLiveTenYearYieldSmokeTest() {
 }
 
 function getMacroRiskRegime(score) {
-  const match = MACRO_RISK_CONFIG.regimes.find(regime => score >= regime.min && score < regime.maxExclusive);
+  const numericScore = Number(score);
+  if (!Number.isFinite(numericScore)) return 'Unknown';
+  const match = MACRO_RISK_CONFIG.regimes.find(regime => {
+    const minOk = Object.prototype.hasOwnProperty.call(regime, 'minExclusive')
+      ? numericScore > regime.minExclusive
+      : numericScore >= regime.min;
+    const maxOk = Object.prototype.hasOwnProperty.call(regime, 'maxInclusive')
+      ? numericScore <= regime.maxInclusive
+      : numericScore < regime.maxExclusive;
+    return minOk && maxOk;
+  });
   return match ? match.label : 'Unknown';
 }
 
@@ -1274,15 +1285,30 @@ function buildCurrentMacroRiskSnapshot() {
   };
 }
 
+function getLatestValidatedMonthEndSnapshot() {
+  const history = [...MACRO_RISK_CONFIG.riskHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
+  return history[history.length - 1] || null;
+}
+
 function getMacroRiskHistoryWithCurrentSnapshot() {
+  const historicalRows = [...MACRO_RISK_CONFIG.riskHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
   const current = buildCurrentMacroRiskSnapshot();
-  const historicalRows = MACRO_RISK_CONFIG.riskHistory.filter(item => item.date !== current.date);
-  return [...historicalRows, current].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const latestFrozen = historicalRows[historicalRows.length - 1] || null;
+
+  // Keep validated month-end history frozen. Append a live row only after the live model
+  // has data dated later than the most recent archived month-end snapshot.
+  if (current && latestFrozen && new Date(current.date) > new Date(latestFrozen.date)) {
+    return [...historicalRows, { ...current, isLive: true }];
+  }
+  if (current && !latestFrozen) return [{ ...current, isLive: true }];
+  return historicalRows;
 }
 
 function getLatestMacroRiskSnapshot() {
-  const history = getMacroRiskHistoryWithCurrentSnapshot();
-  return history[history.length - 1];
+  // Before a successful live refresh, use the latest validated month-end snapshot
+  // rather than falling back to an older indicator baseline. After refresh, use live data.
+  if (!macroRiskLiveOverrides.asOf) return getLatestValidatedMonthEndSnapshot();
+  return buildCurrentMacroRiskSnapshot();
 }
 
 function runMacroRiskModelSmokeTest() {
@@ -1324,9 +1350,9 @@ function runMacroRiskModelSmokeTest() {
       pass: current.bubbleScore === 1.1 && current.bubbleRegime === 'Moderate' && bubbleManualScore === 1.1
     },
     history: {
-      latestDate: current.date,
-      latestSource: current.source,
-      pass: getLatestMacroRiskSnapshot().date === current.date
+      latestValidatedDate: getLatestValidatedMonthEndSnapshot() ? getLatestValidatedMonthEndSnapshot().date : null,
+      currentIndicatorDate: current.date,
+      pass: Boolean(getLatestValidatedMonthEndSnapshot() && getLatestValidatedMonthEndSnapshot().date === '2026-08-31')
     }
   };
 }
@@ -1373,9 +1399,21 @@ function updateMacroRiskSummaryCards() {
   bubbleBadge.textContent = latest.bubbleRegime;
   bubbleBadge.className = 'macro-risk-card-badge ' + getRegimeBadgeClass(latest.bubbleRegime);
 
-  document.getElementById('reset-risk-sub').textContent = 'Latest snapshot: ' + snapshotDate + '. Long-cycle structural pressure remains ' + latest.resetRegime.toLowerCase() + '.';
-  document.getElementById('bubble-risk-sub').textContent = 'Latest snapshot: ' + snapshotDate + '. Financial-cycle stress remains ' + latest.bubbleRegime.toLowerCase() + '.';
-  document.getElementById('macro-risk-note').textContent = 'Current macro posture: ' + latest.resetRegime + ' reset risk + ' + latest.bubbleRegime + ' bubble risk. This supports resilience and discipline without tactical panic.';
+  const liveActive = Boolean(macroRiskLiveOverrides.asOf);
+  const latestValidated = getLatestValidatedMonthEndSnapshot();
+  const validatedText = latestValidated ? formatMacroRiskDate(latestValidated.date) : '—';
+  const scorePrefix = liveActive ? 'Live score' : 'Validated month-end';
+
+  document.getElementById('reset-risk-sub').textContent = scorePrefix + ': ' + snapshotDate + '. Latest frozen month-end: ' + validatedText + '.';
+  document.getElementById('bubble-risk-sub').textContent = scorePrefix + ': ' + snapshotDate + '. Latest frozen month-end: ' + validatedText + '.';
+
+  let postureText = 'Monitor conditions; no broad defensive shift is indicated by the primary models.';
+  if (latest.resetRegime === 'High' || latest.bubbleRegime === 'High') postureText = 'High caution: emphasize liquidity, reduce fragility, and reassess concentrated risk.';
+  else if (latest.resetRegime === 'Elevated' && latest.bubbleRegime === 'Elevated') postureText = 'Broad caution: maintain structural hedges, liquidity, and tighter risk discipline.';
+  else if (latest.resetRegime === 'Elevated') postureText = 'Structural caution: maintain resilience without tactical panic.';
+  else if (latest.bubbleRegime === 'Elevated') postureText = 'Cycle caution: stay invested but tighten valuation and liquidity discipline.';
+
+  document.getElementById('macro-risk-note').textContent = 'Current macro posture: ' + latest.resetRegime + ' reset risk + ' + latest.bubbleRegime + ' bubble risk. ' + postureText;
 }
 
 function formatRiskDelta(current, previous) {
@@ -1533,10 +1571,11 @@ function updateRiskHistoryTable() {
     const resetDelta = formatRiskDelta(item.resetScore, previous ? previous.resetScore : null);
     const bubbleDelta = formatRiskDelta(item.bubbleScore, previous ? previous.bubbleScore : null);
     const latestClass = index === history.length - 1 ? ' risk-history-row-latest' : '';
+    const liveTag = item.isLive ? ' <span class="risk-history-regime badge-loading">LIVE</span>' : '';
 
     return `
       <div class="risk-history-row${latestClass}">
-        <div class="risk-history-date">${formatMacroRiskDate(item.date)}</div>
+        <div class="risk-history-date">${formatMacroRiskDate(item.date)}${liveTag}</div>
         <div><span class="risk-history-score">${item.resetScore.toFixed(1)}</span><span class="risk-history-regime ${getRegimeBadgeClass(item.resetRegime)}">${item.resetRegime}</span><div class="risk-history-change">MoM: ${resetDelta}</div></div>
         <div><span class="risk-history-score">${item.bubbleScore.toFixed(1)}</span><span class="risk-history-regime ${getRegimeBadgeClass(item.bubbleRegime)}">${item.bubbleRegime}</span><div class="risk-history-change">MoM: ${bubbleDelta}</div></div>
         <div>${getCombinedMacroRiskRead(item)}</div>
@@ -1544,8 +1583,10 @@ function updateRiskHistoryTable() {
     `;
   }).join('');
 
-  const latest = history[history.length - 1];
-  footerEl.textContent = 'Latest live/current read: ' + formatMacroRiskDate(latest.date) + ' — ' + latest.resetRegime + ' reset risk and ' + latest.bubbleRegime + ' bubble risk. The latest row updates when live data refreshes; older monthly rows are frozen validated snapshots and do not auto-commit a new month.';
+  const latestValidated = getLatestValidatedMonthEndSnapshot();
+  const current = macroRiskLiveOverrides.asOf ? buildCurrentMacroRiskSnapshot() : null;
+  const liveText = current ? ' Current live model: ' + formatMacroRiskDate(current.date) + ' — ' + current.resetRegime + ' reset / ' + current.bubbleRegime + ' bubble.' : '';
+  footerEl.textContent = 'Latest validated month-end: ' + formatMacroRiskDate(latestValidated.date) + ' — ' + latestValidated.resetRegime + ' reset / ' + latestValidated.bubbleRegime + ' bubble.' + liveText + ' Month-end archive rows stay frozen until intentionally added.';
 }
 
 function getScoreBadgeClass(score) {
