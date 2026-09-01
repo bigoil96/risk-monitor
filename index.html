@@ -436,6 +436,7 @@
   </div>
   <div class="controls">
     <button class="btn" onclick="fetchData()">Refresh data</button>
+    <button class="btn" onclick="clearMacroCache()" title="Forces a fresh pull from all sources on next refresh">Clear cache</button>
   </div>
 
   <div class="last-updated" id="last-updated">Not yet loaded</div>
@@ -2024,28 +2025,34 @@ async function fetchYahooGldm90dHigh() {
 async function fetchGldm90dHigh() {
   // Use Alpha Vantage daily GLDM data for the actual ETF trigger calculation.
   // Do not mix spot gold data into the DCA rule; GLDM purchases and cooldowns are in GLDM dollars.
+  // Cached for 24 hours: a 90-day rolling high changes minimally within a single day,
+  // so there is no reason to spend Alpha Vantage quota re-fetching the full history
+  // on every page refresh — that quota is better spent keeping the GLDM spot quote fresh.
   const AV_KEY = 'XO2H1EHRTK5N8UBK';
   try {
-    const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=GLDM&outputsize=compact&apikey=${AV_KEY}`);
-    const d = await r.json();
-    const series = d['Time Series (Daily)'];
-    if (!series) throw new Error('No GLDM daily data');
+    const cached = await fetchWithCache('gldm_90d_history', 24 * 60 * 60 * 1000, async () => {
+      const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=GLDM&outputsize=compact&apikey=${AV_KEY}`);
+      const d = await r.json();
+      const series = d['Time Series (Daily)'];
+      if (!series) throw new Error('No GLDM daily data');
 
-    const closes = Object.entries(series)
-      .sort((a,b) => new Date(b[0]) - new Date(a[0]))
-      .slice(0, 90)
-      .map(([,v]) => parseFloat(v['4. close']))
-      .filter(value => Number.isFinite(value) && value > 0)
-      .reverse();
+      const closes = Object.entries(series)
+        .sort((a,b) => new Date(b[0]) - new Date(a[0]))
+        .slice(0, 90)
+        .map(([,v]) => parseFloat(v['4. close']))
+        .filter(value => Number.isFinite(value) && value > 0)
+        .reverse();
 
-    if (closes.length < 5) throw new Error('Insufficient GLDM history');
+      if (closes.length < 5) throw new Error('Insufficient GLDM history');
 
-    let maxAvg = 0;
-    for (let i = 4; i < closes.length; i++) {
-      const avg = (closes[i] + closes[i-1] + closes[i-2] + closes[i-3] + closes[i-4]) / 5;
-      if (avg > maxAvg) maxAvg = avg;
-    }
-    return maxAvg;
+      let maxAvg = 0;
+      for (let i = 4; i < closes.length; i++) {
+        const avg = (closes[i] + closes[i-1] + closes[i-2] + closes[i-3] + closes[i-4]) / 5;
+        if (avg > maxAvg) maxAvg = avg;
+      }
+      return maxAvg;
+    });
+    return cached.value;
   } catch(e) {
     console.warn('Alpha Vantage GLDM 90-day high unavailable; trying Yahoo fallback', e);
     try {
@@ -2172,7 +2179,72 @@ function updateDCATracker() {
 
 const FRED_API_KEY = 'e009c048723673a26fda0f7aaef4f060';
 
+// ---- Cache layer: prevents rate-limit failures by reusing recent data ----
+// Alpha Vantage free tier allows only 25 calls/day. Without caching, every
+// page refresh could burn 3 calls (GLDM quote, GLDM history, EUR/USD),
+// exhausting the quota after ~8 refreshes and causing silent failures.
+const CACHE_PREFIX = 'mrm_cache_';
+
+function getCached(key, maxAgeMs) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.ts !== 'number') return null;
+    if (Date.now() - parsed.ts > maxAgeMs) return { ...parsed, stale: true };
+    return { ...parsed, stale: false };
+  } catch(e) { return null; }
+}
+
+function setCached(key, value) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), value }));
+  } catch(e) { /* localStorage unavailable — proceed without caching */ }
+}
+
+// Fetches a value with caching. If a fresh cache entry exists, returns it
+// without a network call. If the network call fails, falls back to any
+// cached value (even stale) rather than showing a blank indicator.
+async function fetchWithCache(key, maxAgeMs, fetchFn) {
+  const cached = getCached(key, maxAgeMs);
+  if (cached && !cached.stale) return { value: cached.value, source: 'cache' };
+  try {
+    const value = await fetchFn();
+    if (value !== null && value !== undefined) {
+      setCached(key, value);
+      return { value, source: 'live' };
+    }
+    throw new Error('Empty value from fetch');
+  } catch(e) {
+    if (cached) return { value: cached.value, source: 'stale-cache' };
+    throw e;
+  }
+}
+
+function clearMacroCache() {
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(CACHE_PREFIX))
+      .forEach(k => localStorage.removeItem(k));
+    document.getElementById('last-updated').textContent = 'Cache cleared — click Refresh data to pull fresh values.';
+  } catch(e) {
+    console.warn('Could not clear cache', e);
+  }
+}
+
+let fetchDataInFlight = false;
+
 async function fetchData() {
+  if (fetchDataInFlight) return; // prevent double-clicks from burning API quota
+  fetchDataInFlight = true;
+  try {
+    await fetchDataInner();
+  } finally {
+    fetchDataInFlight = false;
+  }
+}
+
+async function fetchDataInner() {
   document.getElementById('last-updated').textContent = 'Fetching live data...';
   const proxy = 'https://corsproxy.io/?';
   const results = {};
@@ -2229,17 +2301,23 @@ async function fetchData() {
   }
 
   // Fetch actual GLDM ETF price from Alpha Vantage first, then Stooq EOD as fallback.
+  // Cached for 2 hours — this dashboard is checked weekly, not intraday, so there is
+  // no reason to spend Alpha Vantage's scarce 25-calls/day quota on every page refresh.
   try {
     let gldmQuote = null;
     try {
-      const avUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLDM&apikey=${AV_KEY}`;
-      const d = await fetchJsonWithFallbacks(avUrl);
-      const price = parseFloat(d['Global Quote'] && d['Global Quote']['05. price']);
-      if (Number.isFinite(price) && price > 0) {
-        gldmQuote = { price, date: 'live (Alpha Vantage)', source: 'Alpha Vantage' };
-      } else {
-        throw new Error('No valid Alpha Vantage GLDM quote');
-      }
+      const cached = await fetchWithCache('gldm_quote', 2 * 60 * 60 * 1000, async () => {
+        const avUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLDM&apikey=${AV_KEY}`;
+        const d = await fetchJsonWithFallbacks(avUrl);
+        const price = parseFloat(d['Global Quote'] && d['Global Quote']['05. price']);
+        if (!Number.isFinite(price) || price <= 0) throw new Error('No valid Alpha Vantage GLDM quote');
+        return price;
+      });
+      gldmQuote = {
+        price: cached.value,
+        date: cached.source === 'live' ? 'live (Alpha Vantage)' : cached.source === 'cache' ? 'cached (Alpha Vantage, <2h old)' : 'stale cache (Alpha Vantage)',
+        source: 'Alpha Vantage'
+      };
     } catch(avError) {
       console.warn('Alpha Vantage GLDM quote unavailable; trying Yahoo fallback', avError);
       try {
@@ -2289,31 +2367,36 @@ async function fetchData() {
     results.gldmSource = null;
   }
 
-  // Fetch EUR/USD from Alpha Vantage for accurate DXY approximation
+  // Fetch EUR/USD for DXY approximation.
+  // Frankfurter is used FIRST because it is free and unlimited — this reserves the
+  // entire Alpha Vantage daily quota for the GLDM price, which has no free unlimited
+  // alternative. Alpha Vantage is only used here if Frankfurter is unreachable.
   try {
-    const r = await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=EUR&to_currency=USD&apikey=${AV_KEY}`);
+    const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
     const d = await r.json();
-    const eurUsd = parseFloat(d['Realtime Currency Exchange Rate']['5. Exchange Rate']);
+    const usdPerEur = 1 / d.rates.EUR;
     // DXY ≈ 127.5 - 25.2 * EUR/USD (calibrated: EUR/USD=1.09 → DXY=100)
-    results.dxy = Math.round((127.5 - 25.2 * eurUsd) * 10) / 10;
+    results.dxy = Math.round((127.5 - 25.2 * usdPerEur) * 10) / 10;
   } catch(e) {
-    // Fallback to frankfurter if Alpha Vantage fails
+    console.warn('Frankfurter unavailable; falling back to Alpha Vantage for DXY (uses shared quota)', e);
     try {
-      const r = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR');
+      const r = await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=EUR&to_currency=USD&apikey=${AV_KEY}`);
       const d = await r.json();
-      const usdPerEur = 1 / d.rates.EUR;
-      results.dxy = Math.round((127.5 - 25.2 * usdPerEur) * 10) / 10;
+      const eurUsd = parseFloat(d['Realtime Currency Exchange Rate']['5. Exchange Rate']);
+      results.dxy = Math.round((127.5 - 25.2 * eurUsd) * 10) / 10;
     } catch(e2) { results.dxy = null; }
   }
 
   // Fetch live HY spread from FRED (ICE BofA US High Yield OAS — series BAMLH0A0HYM2)
+  // Uses the shared fallback chain (direct → corsproxy → allorigins) like the other
+  // FRED calls, instead of a single hardcoded proxy attempt with no backup.
   try {
-    const fredUrl = proxy + encodeURIComponent(`https://api.stlouisfed.org/fred/series/observations?series_id=BAMLH0A0HYM2&api_key=${FRED_API_KEY}&sort_order=desc&limit=1&file_type=json`);
-    const fr = await fetch(fredUrl);
-    const fd = await fr.json();
+    const rawUrl = buildFredRawApiUrl('BAMLH0A0HYM2', 1);
+    const fd = await fetchJsonWithFallbacks(rawUrl);
     const obs = fd.observations[0];
     results.hy = parseFloat(obs.value) * 100; // FRED returns in %, convert to bps
   } catch(e) {
+    console.warn('HY spread unavailable from all sources', e);
     results.hy = null; // no silent fallback; show unavailable if FRED fails
   }
 
